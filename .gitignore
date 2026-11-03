@@ -1,0 +1,147 @@
+# ==============================================================
+# CameraScanner .gitignore
+# ==============================================================
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# --- Виртуальное окружение ---
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# --- PyInstaller ---
+build/
+dist/
+*.spec.bak
+*.manifest
+*.toc
+
+# --- PyCharm / IDE ---
+.idea/
+.vscode/
+*.iml
+*.iws
+*.ipr
+*.sublime-project
+*.sublime-workspace
+
+# --- Jupyter ---
+.ipynb_checkpoints/
+
+# --- pytest / coverage ---
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+
+# --- mypy / ruff / black ---
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.ruff_cache/
+.cache/
+
+# --- ОС ---
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# --- Логи и временные файлы ---
+*.log
+*.tmp
+*.temp
+*.bak
+*.swp
+*~
+*.pid
+*.seed
+*.pid.lock
+
+# --- Результаты сканирования и локальные данные ---
+scan_results.csv
+*.csv
+!docs/*.csv
+results/
+output/
+
+# --- Секреты и локальные конфиги ---
+.env
+.env.*
+!.env.example
+secrets.json
+secrets.yaml
+secrets.yml
+config.local.*
+*.local.json
+credentials.*
+*.pem
+*.key
+
+# --- Скомпилированные бинарники (если вдруг появятся в dev) ---
+*.exe
+*.dll
+*.pyd
+*.so
+dist/*.exe
+!assets/*.dll
+
+# --- PyCharm сгенерированное ---
+.idea/**/workspace.xml
+.idea/**/tasks.xml
+.idea/**/usage.statistics.xml
+.idea/**/shelf/
+.idea/**/contentModel.xml
+.idea/**/dataSources/
+.idea/**/dataSources.ids
+.idea/**/dataSources.local.xml
+.idea/**/sqlDataSources.xml
+.idea/**/dynamic.xml
+.idea/**/uiDesigner.xml
+.idea/**/gradle.xml
+.idea/**/libraries
+.idea/**/misc.xml
+.idea/**/modules.xml
+
+# ==============================================================
+# Исключения — файлы, которые ОБЯЗАТЕЛЬНО должны быть в репозитории
+# ==============================================================
+!requirements.txt
+!CameraScanner.spec
+!assets/app.ico
+!README.md
+!LICENSE
+!.gitignore
