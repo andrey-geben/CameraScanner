@@ -20,12 +20,14 @@ def _http_get(host: str, port: int, path: str,
             conn = http.client.HTTPSConnection(host, port, timeout=timeout, context=ctx)
         else:
             conn = http.client.HTTPConnection(host, port, timeout=timeout)
-        conn.request("GET", path, headers={"User-Agent": "CameraScanner/1.0"})
-        resp = conn.getresponse()
-        body = resp.read(4096).decode("utf-8", errors="ignore")
-        hdrs = {k.lower(): v for k, v in resp.getheaders()}
-        conn.close()
-        return resp.status, hdrs, body
+        try:
+            conn.request("GET", path, headers={"User-Agent": "CameraScanner/1.0"})
+            resp = conn.getresponse()
+            body = resp.read(4096).decode("utf-8", errors="ignore")
+            hdrs = {k.lower(): v for k, v in resp.getheaders()}
+            return resp.status, hdrs, body
+        finally:
+            conn.close()
     except Exception:
         return None, {}, ""
 

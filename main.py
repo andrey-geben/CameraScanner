@@ -3,6 +3,7 @@ import argparse
 import ctypes
 import ipaddress
 import os
+import subprocess
 import sys
 import threading
 import tkinter as tk
@@ -30,9 +31,9 @@ from exporter import export_to_csv
 
 # ------------------------------------------------------------------ constants
 APP_NAME = "CameraScanner"
-APP_VERSION = "1.3.0"
-APP_AUTHOR = "Andew Geben"
-APP_COPYRIGHT = f"© 2025 {APP_AUTHOR}. Все права защищены."
+APP_VERSION = "1.3.1"
+APP_AUTHOR = "Andrew Genben"
+APP_COPYRIGHT = f"© 2025–2026 {APP_AUTHOR}. Все права защищены."
 APP_DESCRIPTION = (
     "Утилита активного поиска IP-камер в локальной сети.\n"
     "Протоколы: SNMP, ONVIF WS-Discovery, SADP (Hikvision), Dahua,\n"
@@ -169,7 +170,7 @@ def relaunch_as_admin(extra_args: list[str]) -> bool:
     else:
         executable, args = sys.executable, [sys.argv[0], "--elevated"] + extra_args
     result = ctypes.windll.shell32.ShellExecuteW(
-        None, "runas", executable, " ".join(args), None, 1
+        None, "runas", executable, subprocess.list2cmdline(args), None, 1
     )
     return result > 32
 
@@ -725,7 +726,21 @@ class CameraScannerApp:
         self.tree.delete(*self.tree.get_children())
         self.results.clear()
         self.status_var.set("Сканирование…")
-        self._scan_thread = threading.Thread(target=self.run_scan, daemon=True)
+        settings = {
+            "auto": self.auto_discovery.get(),
+            "subnet": self.subnet_entry.get().strip(),
+            "community": self.community_entry.get(),
+            "snmp_version": self.snmp_version.get(),
+            "snmp": self.use_snmp.get(),
+            "onvif": self.use_onvif.get(),
+            "sadp": self.use_sadp.get(),
+            "dahua": self.use_dahua.get(),
+            "arp": self.use_arp.get(),
+            "portscan": self.use_portscan.get(),
+            "isapi": self.use_isapi.get(),
+        }
+        self._scan_thread = threading.Thread(
+            target=self.run_scan, args=(settings,), daemon=True)
         self._scan_thread.start()
 
     def stop_scan(self):
@@ -735,19 +750,31 @@ class CameraScannerApp:
         self.stop_btn.config(state="disabled")
         self.status_var.set("Остановка…")
 
-    def run_scan(self):
+    def run_scan(self, settings: dict):
+        """Обёртка: ошибки не должны оставлять кнопки заблокированными."""
+        try:
+            self._run_scan(settings)
+        except Exception as exc:  # noqa: BLE001
+            self.results.append({
+                "ip": "", "mac": "", "protocol": "Ошибка",
+                "info": f"Сканирование прервано: {exc}",
+            })
+            self._set_status(f"Ошибка сканирования: {exc}")
+            self.root.after(0, lambda: self.update_treeview(True))
+
+    def _run_scan(self, settings: dict):
         all_devices: list[dict] = []
         found_ips: set[str] = set()
         stopped = False
         se = self.stop_event
 
         subnets: list[ipaddress.IPv4Network] = []
-        if self.auto_discovery.get():
+        if settings['auto']:
             subnets = get_local_subnets(min_hosts=4, max_hosts=4096)
             if not subnets:
                 self._set_status("Не удалось определить локальные подсети")
         else:
-            subnet_str = self.subnet_entry.get().strip()
+            subnet_str = settings['subnet']
             try:
                 net = ipaddress.ip_network(subnet_str, strict=False)
                 if net.num_addresses > 4096:
@@ -764,10 +791,10 @@ class CameraScannerApp:
             all_hosts.extend(str(ip) for ip in net.hosts())
 
         # SNMP
-        if self.use_snmp.get() and not self.auto_discovery.get() and subnets:
+        if settings['snmp'] and not settings['auto'] and subnets:
             net = subnets[0]
-            community = self.community_entry.get()
-            version = self.snmp_version.get()
+            community = settings['community']
+            version = settings['snmp_version']
             self._set_status(f"SNMP: {net}…")
             for ip in net.hosts():
                 if se.is_set():
@@ -789,7 +816,7 @@ class CameraScannerApp:
         # ARP
         if not stopped and se.is_set():
             stopped = True
-        if not stopped and self.use_arp.get() and all_hosts:
+        if not stopped and settings['arp'] and all_hosts:
             self._set_status(f"ARP: ping sweep {len(all_hosts)} хостов…")
             for r in arp_scan(all_hosts, stop_event=se):
                 all_devices.append({
@@ -802,7 +829,7 @@ class CameraScannerApp:
         # Port scan
         if not stopped and se.is_set():
             stopped = True
-        if not stopped and self.use_portscan.get() and all_hosts:
+        if not stopped and settings['portscan'] and all_hosts:
             self._set_status(f"Port scan: {len(all_hosts)} хостов…")
             for r in port_scan(all_hosts, stop_event=se):
                 ports_str = ", ".join(f"{p}/{name}" for p, name in r["ports"].items())
@@ -817,7 +844,7 @@ class CameraScannerApp:
         # ONVIF
         if not stopped and se.is_set():
             stopped = True
-        if not stopped and self.use_onvif.get():
+        if not stopped and settings['onvif']:
             self._set_status("ONVIF: поиск…")
             for dev in discover_onvif(timeout=5, broadcast_fallback=True, stop_event=se):
                 all_devices.append({
@@ -829,7 +856,7 @@ class CameraScannerApp:
         # SADP
         if not stopped and se.is_set():
             stopped = True
-        if not stopped and self.use_sadp.get():
+        if not stopped and settings['sadp']:
             if not is_admin():
                 all_devices.append({"ip": "", "mac": "", "protocol": "SADP",
                                     "info": "Пропущено: нет прав администратора"})
@@ -851,7 +878,7 @@ class CameraScannerApp:
         # Dahua
         if not stopped and se.is_set():
             stopped = True
-        if not stopped and self.use_dahua.get():
+        if not stopped and settings['dahua']:
             self._set_status("Dahua: поиск…")
             try:
                 for dev in discover_dahua(timeout=5.0, stop_event=se):
@@ -869,9 +896,17 @@ class CameraScannerApp:
         # ISAPI
         if not stopped and se.is_set():
             stopped = True
-        if not stopped and self.use_isapi.get() and found_ips:
-            self._set_status(f"ISAPI: проба {len(found_ips)} хостов…")
-            for ip in sorted(found_ips):
+        if not stopped and settings['isapi']:
+            if found_ips:
+                isapi_targets = sorted(found_ips)
+            else:
+                # ISAPI выбран единственным методом — проверяем первые хосты подсети
+                isapi_targets = all_hosts[:32]
+            if not isapi_targets:
+                all_devices.append({"ip": "", "mac": "", "protocol": "ISAPI",
+                                    "info": "Нет хостов для проверки (укажите подсеть)"})
+            self._set_status(f"ISAPI: проба {len(isapi_targets)} хостов…")
+            for ip in isapi_targets:
                 if se.is_set():
                     stopped = True
                     break
@@ -902,6 +937,7 @@ class CameraScannerApp:
         self.root.after(0, lambda: self.status_var.set(text))
 
     def update_treeview(self, stopped: bool = False):
+        self.tree.delete(*self.tree.get_children())
         seen: set[tuple] = set()
         for dev in self.results:
             key = (dev.get("ip", ""), dev.get("mac", ""),
@@ -938,7 +974,7 @@ class CameraScannerApp:
 
 # --------------------------------------------------------------------- CLI
 def parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(add_help=False)
+    p = argparse.ArgumentParser(description="CameraScanner — поиск IP-камер в локальной сети")
     p.add_argument("--elevated", action="store_true")
     p.add_argument("--subnet")
     p.add_argument("--community")

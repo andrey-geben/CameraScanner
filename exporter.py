@@ -13,9 +13,9 @@ def export_to_csv(devices, filename="scan_results.csv"):
     fieldnames = set()
     for device in devices:
         fieldnames.update(device.keys())
-    fieldnames = list(fieldnames)
+    fieldnames = sorted(fieldnames)
 
-    with open(filename, mode='w', newline='', encoding='utf-8') as csvfile:
+    with open(filename, mode='w', newline='', encoding='utf-8-sig') as csvfile:
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
         for device in devices:

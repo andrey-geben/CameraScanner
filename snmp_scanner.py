@@ -53,7 +53,10 @@ async def snmp_get_async(ip: str, version: str, community: str = "public", v3_pa
         return {"error": f"Unsupported SNMP version: {version}"}
 
     snmp_engine = SnmpEngine()
-    transport = await UdpTransportTarget.create((ip, 161), timeout=1, retries=0)
+    try:
+        transport = await UdpTransportTarget.create((ip, 161), timeout=1, retries=0)
+    except Exception as exc:  # noqa: BLE001
+        return {"error": f"Transport: {exc}"}
 
     for name, oid in all_oids.items():
         try:
@@ -81,4 +84,7 @@ def snmp_get(ip: str, version: str, community: str = "public", v3_params: dict |
     """
     Синхронная обёртка для вызова из потока GUI.
     """
-    return asyncio.run(snmp_get_async(ip, version, community, v3_params))
+    try:
+        return asyncio.run(snmp_get_async(ip, version, community, v3_params))
+    except Exception as exc:  # noqa: BLE001
+        return {"error": f"Exception: {exc}"}
