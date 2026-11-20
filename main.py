@@ -37,7 +37,7 @@ from stream_player import StreamPlayerWindow
 
 # ------------------------------------------------------------------ constants
 APP_NAME = "CameraScanner"
-APP_VERSION = "1.5.0"
+APP_VERSION = "1.6.0"
 APP_AUTHOR = "Andrew Genben"
 APP_COPYRIGHT = f"© 2025–2026 {APP_AUTHOR}. Все права защищены."
 APP_DESCRIPTION = (
@@ -190,13 +190,10 @@ def apply_theme_to_titlebar(root: tk.Tk) -> None:
         return
     version = sys.getwindowsversion()
     if version.major == 10 and version.build >= 22000:
-        pywinstyles.change_header_color(
-            root, "#1c1c1c" if sv_ttk.get_theme() == "dark" else "#fafafa"
-        )
+        pywinstyles.change_header_color(root, "#15181C")
+        pywinstyles.apply_style(root, "dark")
     elif version.major == 10:
-        pywinstyles.apply_style(
-            root, "dark" if sv_ttk.get_theme() == "dark" else "normal"
-        )
+        pywinstyles.apply_style(root, "dark")
         root.wm_attributes("-alpha", 0.99)
         root.wm_attributes("-alpha", 1)
 
@@ -217,7 +214,7 @@ class CameraScannerApp:
         self._restore = restore or {}
 
         try:
-            sv_ttk.set_theme(darkdetect.theme() if _DARKDETECT_OK and darkdetect.theme() else "light")
+            sv_ttk.set_theme("dark")
         except Exception:
             sv_ttk.set_theme("light")
         apply_theme_to_titlebar(self.root)
@@ -234,101 +231,155 @@ class CameraScannerApp:
     # ------------------------------------------------------------- styles
     def _init_styles(self):
         style = ttk.Style()
-        is_dark = sv_ttk.get_theme() == "dark"
-        style.configure("Footer.TLabel",
-                        foreground="#888888" if is_dark else "#666666")
-        style.configure("Hint.TLabel",
-                        foreground="#8a8a8a" if is_dark else "#777777",
+        try:
+            style.theme_use("clam")
+        except tk.TclError:
+            pass
+
+        bg = "#15181C"
+        panel = "#1B2026"
+        card = "#20262E"
+        border = "#2E3740"
+        text = "#E6EDF3"
+        muted = "#8B949E"
+        accent = "#E6A100"
+        danger = "#F85149"
+
+        self.root.configure(bg=bg)
+        style.configure(".", background=bg, foreground=text,
+                        fieldbackground=card, bordercolor=border,
+                        focuscolor=accent)
+        style.configure("TFrame", background=bg)
+        style.configure("Panel.TFrame", background=panel)
+        style.configure("Card.TFrame", background=card)
+        style.configure("TLabel", background=bg, foreground=text,
+                        font=("Segoe UI", 9))
+        style.configure("Panel.TLabel", background=panel, foreground=text)
+        style.configure("Title.TLabel", background=bg, foreground=accent,
+                        font=("Segoe UI Semibold", 15))
+        style.configure("Subtitle.TLabel", background=bg, foreground=muted,
+                        font=("Consolas", 8))
+        style.configure("Section.TLabel", background=panel, foreground=accent,
+                        font=("Segoe UI Semibold", 9))
+        style.configure("Muted.TLabel", background=bg, foreground=muted)
+        style.configure("Footer.TLabel", background=panel, foreground=muted,
+                        font=("Consolas", 8))
+        style.configure("Hint.TLabel", background=panel, foreground=muted,
                         font=("Segoe UI", 8))
-        # Стили для окна «Способы сканирования»
-        style.configure("MethodTitle.TLabel",
-                        font=("Segoe UI", 11, "bold"))
-        style.configure("MethodBadge.TLabel",
-                        font=("Segoe UI", 8),
-                        foreground="#2f6fbc" if not is_dark else "#7db4f2")
-        style.configure("MethodText.TLabel",
-                        font=("Segoe UI", 9),
-                        foreground="#333333" if not is_dark else "#dddddd")
+        style.configure("TLabelframe", background=panel, bordercolor=border,
+                        relief="solid", borderwidth=1)
+        style.configure("TLabelframe.Label", background=panel,
+                        foreground=accent, font=("Segoe UI Semibold", 9))
+
+        style.configure("TButton", background=card, foreground=text,
+                        bordercolor=border, focuscolor=accent,
+                        padding=(10, 5), font=("Segoe UI", 9))
+        style.map("TButton",
+                  background=[("active", "#2A323C"), ("disabled", panel)],
+                  foreground=[("disabled", muted)])
+        style.configure("Accent.TButton", background=accent, foreground="#15181C",
+                        font=("Segoe UI Semibold", 9))
+        style.map("Accent.TButton",
+                  background=[("active", "#F0B84A")],
+                  foreground=[("disabled", muted)])
+        style.configure("Danger.TButton", background="#3A2224", foreground="#FFB3B3",
+                        bordercolor="#6E2A2E")
+        style.map("Danger.TButton", background=[("active", "#4A2A2D")])
+
+        style.configure("TEntry", fieldbackground=card, foreground=text,
+                        insertcolor=text, bordercolor=border, padding=4)
+        style.map("TEntry", bordercolor=[("focus", accent)])
+        style.configure("TCombobox", fieldbackground=card, background=card,
+                        foreground=text, arrowcolor=accent, bordercolor=border,
+                        padding=3)
+        style.map("TCombobox", fieldbackground=[("readonly", card)])
+
+        style.configure("TCheckbutton", background=panel, foreground=text,
+                        font=("Segoe UI", 9))
+        style.map("TCheckbutton",
+                  background=[("active", panel)],
+                  foreground=[("disabled", muted)])
+
+        style.configure("TNotebook", background=bg, bordercolor=border,
+                        tabmargins=(0, 0, 0, 0))
+        style.configure("TNotebook.Tab", background=panel, foreground=muted,
+                        padding=(12, 7), font=("Segoe UI Semibold", 9))
+        style.map("TNotebook.Tab",
+                  background=[("selected", card)],
+                  foreground=[("selected", accent)])
+
+        style.configure("Treeview", background=card, fieldbackground=card,
+                        foreground=text, rowheight=25, bordercolor=border,
+                        font=("Consolas", 9))
+        style.configure("Treeview.Heading", background=panel, foreground=accent,
+                        font=("Segoe UI Semibold", 9), relief="flat")
+        style.map("Treeview",
+                  background=[("selected", "#2D3A46")],
+                  foreground=[("selected", text)])
+        style.configure("TScrollbar", background=panel, troughcolor=bg,
+                        bordercolor=border, arrowcolor=muted)
+        style.configure("TSeparator", background=border)
 
     # ------------------------------------------------------------- UI build
     def _build_ui(self):
         r = self._restore
+        # Не выходим за рабочую область экрана (1080p при 125% масштабе — частая ловушка)
+        sw, sh = self.root.winfo_screenwidth(), self.root.winfo_screenheight()
+        self.root.geometry(f"{min(1440, sw - 80)}x{min(900, sh - 120)}")
+        self.root.minsize(1200, 700)
 
-        main = ttk.Frame(self.root, padding=(12, 10, 12, 10))
-        main.pack(fill="both", expand=True)
-        main.columnconfigure(0, weight=0, minsize=self.LEFT_PANEL_MINWIDTH)
-        main.columnconfigure(1, weight=1)
-        main.rowconfigure(1, weight=1)
+        # ============================ ВЕРХНЯЯ ПАНЕЛЬ ============================
+        top = ttk.Frame(self.root, style="Panel.TFrame", padding=(14, 10))
+        top.pack(side="top", fill="x")
+        brand = ttk.Frame(top, style="Panel.TFrame")
+        brand.pack(side="left")
+        ttk.Label(brand, text="CAMERASCANNER", style="Title.TLabel").pack(anchor="w")
+        ttk.Label(brand, text="NETWORK DISCOVERY // IP CAMERAS",
+                  style="Subtitle.TLabel").pack(anchor="w")
 
-        # ======================= ВЕРХ: только подсеть =======================
-        top_frame = ttk.LabelFrame(main, text=" Параметры сети ", padding=(12, 8))
-        top_frame.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 10))
-
-        ttk.Label(top_frame, text="Подсеть (CIDR):").grid(row=0, column=0, sticky="w")
-        self.subnet_entry = ttk.Entry(top_frame, width=24)
-        self.subnet_entry.grid(row=0, column=1, sticky="w", padx=(8, 0))
+        controls = ttk.Frame(top, style="Panel.TFrame")
+        controls.pack(side="right")
+        ttk.Label(controls, text="ПОДСЕТЬ", style="Panel.TLabel").pack(side="left")
+        self.subnet_entry = ttk.Entry(controls, width=20)
+        self.subnet_entry.pack(side="left", padx=(6, 12))
         self.subnet_entry.insert(0, r.get("subnet", "192.168.1.0/24"))
-
-        ttk.Label(top_frame, text="Пример: 192.168.1.0/24").grid(
-            row=0, column=2, sticky="w", padx=(12, 0))
-        top_frame.columnconfigure(3, weight=1)
-
-        # ============================ ЛЕВАЯ ПАНЕЛЬ ============================
-        left = ttk.Frame(main)
-        left.grid(row=1, column=0, sticky="nsew", padx=(0, 10))
-
-        # ---- SNMP ----
-        snmp_frame = ttk.LabelFrame(left, text=" SNMP ", padding=(12, 8))
-        snmp_frame.pack(fill="x", pady=(0, 8))
-
-        ttk.Label(snmp_frame, text="Community:").grid(row=0, column=0, sticky="w", pady=2)
-        self.community_entry = ttk.Entry(snmp_frame, width=18)
-        self.community_entry.grid(row=0, column=1, sticky="ew", padx=(8, 0), pady=2)
-        self.community_entry.insert(0, r.get("community", "public"))
-
-        ttk.Label(snmp_frame, text="Version:").grid(row=1, column=0, sticky="w", pady=2)
-        self.snmp_version = ttk.Combobox(
-            snmp_frame, values=["v1", "v2c", "v3"], width=8, state="readonly")
-        self.snmp_version.grid(row=1, column=1, sticky="w", padx=(8, 0), pady=2)
-        self.snmp_version.set(r.get("snmp_version", "v2c"))
-
-        snmp_frame.columnconfigure(1, weight=1)
-
-        # ---- ONVIF (необязательно) ----
-        onvif_frame = ttk.LabelFrame(left, text=" ONVIF (необязательно) ", padding=(12, 8))
-        onvif_frame.pack(fill="x", pady=(0, 8))
-        ttk.Label(onvif_frame, text="Логин:").grid(row=0, column=0, sticky="w", pady=2)
-        self.onvif_user = ttk.Entry(onvif_frame, width=18)
-        self.onvif_user.grid(row=0, column=1, sticky="ew", padx=(8, 0), pady=2)
-        ttk.Label(onvif_frame, text="Пароль:").grid(row=1, column=0, sticky="w", pady=2)
-        self.onvif_password = ttk.Entry(onvif_frame, width=18, show="*")
-        self.onvif_password.grid(row=1, column=1, sticky="ew", padx=(8, 0), pady=2)
-        ttk.Label(onvif_frame, text="для DeviceInfo / RTSP-потока; можно оставить пустым",
-                  style="Hint.TLabel", justify="left").grid(
-            row=2, column=0, columnspan=2, sticky="w", pady=(2, 0))
-        onvif_frame.columnconfigure(1, weight=1)
-
-        # ---- Режим ----
-        mode_frame = ttk.LabelFrame(left, text=" Режим ", padding=(12, 8))
-        mode_frame.pack(fill="x", pady=(0, 8))
-
         self.auto_discovery = tk.BooleanVar(value=r.get("auto", False))
         self.auto_cb = ttk.Checkbutton(
-            mode_frame,
-            text="Автообнаружение (все интерфейсы)",
-            variable=self.auto_discovery,
-            command=self.on_auto_toggle,
-        )
-        self.auto_cb.pack(anchor="w")
+            controls, text="AUTO", variable=self.auto_discovery,
+            command=self.on_auto_toggle)
+        self.auto_cb.pack(side="left", padx=(0, 12))
+        self.scan_btn = ttk.Button(controls, text="▶  СКАН", style="Accent.TButton",
+                                   command=self.start_scan)
+        self.scan_btn.pack(side="left", ipady=2)
+        self.stop_btn = ttk.Button(controls, text="■  СТОП", style="Danger.TButton",
+                                   command=self.stop_scan, state="disabled")
+        self.stop_btn.pack(side="left", padx=(6, 0), ipady=2)
 
-        ttk.Label(mode_frame,
-                  text="Игнорирует поле подсети. Ищет сразу\nво всех локальных сетях.",
-                  style="Hint.TLabel", justify="left").pack(anchor="w", padx=(22, 0), pady=(2, 0))
+        # ============================ НИЖНИЙ СТАТУС ============================
+        footer = ttk.Frame(self.root, style="Panel.TFrame", padding=(14, 6))
+        footer.pack(side="bottom", fill="x")
+        self.status_var = tk.StringVar(value="Готово")
+        ttk.Label(footer, textvariable=self.status_var, style="Footer.TLabel").pack(side="left")
+        self.copyright_label = ttk.Label(footer, text=APP_COPYRIGHT, style="Footer.TLabel")
+        self.copyright_label.pack(side="right")
 
-        # ---- Протоколы (плоский список) ----
-        proto = ttk.LabelFrame(left, text=" Протоколы обнаружения ", padding=(12, 8))
-        proto.pack(fill="x", pady=(0, 8))
+        # ============================ ТЕЛО: 3 ЗОНЫ ============================
+        body = ttk.Panedwindow(self.root, orient="horizontal")
+        body.pack(fill="both", expand=True, padx=10, pady=(10, 8))
+        sidebar = ttk.Frame(body, width=280, style="Panel.TFrame", padding=(8, 8))
+        body.add(sidebar, weight=0)
+        content = ttk.Frame(body)
+        body.add(content, weight=1)
 
+        # ---------------------------- ЛЕВАЯ ПАНЕЛЬ ----------------------------
+        notebook = ttk.Notebook(sidebar)
+        notebook.pack(fill="both", expand=True)
+        search_tab = ttk.Frame(notebook, style="Panel.TFrame", padding=8)
+        access_tab = ttk.Frame(notebook, style="Panel.TFrame", padding=8)
+        notebook.add(search_tab, text="ПОИСК")
+        notebook.add(access_tab, text="ДОСТУП")
+
+        # ---- вкладка «Поиск» ----
         self.use_snmp     = tk.BooleanVar(value=r.get("snmp", True))
         self.use_onvif    = tk.BooleanVar(value=r.get("onvif", True))
         self.use_sadp     = tk.BooleanVar(value=r.get("sadp", False))
@@ -339,98 +390,127 @@ class CameraScannerApp:
         self.use_ssdp     = tk.BooleanVar(value=r.get("ssdp", True))
         self.use_mdns     = tk.BooleanVar(value=r.get("mdns", True))
 
-        self.snmp_cb = ttk.Checkbutton(proto, text="SNMP (MIB-II + vendor OID)",
-                                       variable=self.use_snmp)
-        self.snmp_cb.pack(anchor="w", pady=3)
+        ttk.Label(search_tab, text="МЕТОДЫ ОБНАРУЖЕНИЯ", style="Section.TLabel").pack(
+            anchor="w", pady=(0, 6))
+        methods = ttk.Frame(search_tab, style="Panel.TFrame")
+        methods.pack(fill="x")
+        method_defs = [
+            ("SNMP", self.use_snmp), ("ONVIF", self.use_onvif),
+            ("SADP", self.use_sadp), ("Dahua", self.use_dahua),
+            ("SSDP", self.use_ssdp), ("mDNS", self.use_mdns),
+            ("ARP", self.use_arp), ("Port scan", self.use_portscan),
+            ("ISAPI", self.use_isapi),
+        ]
+        for i, (label, var) in enumerate(method_defs):
+            cb = ttk.Checkbutton(methods, text=label, variable=var)
+            cb.grid(row=i // 2, column=i % 2, sticky="w", padx=2, pady=3)
+            if label == "SNMP":
+                self.snmp_cb = cb
+            elif label == "SADP":
+                self.sadp_cb = cb
+        ttk.Label(
+            search_tab,
+            text="SADP обычно работает без администратора.\n"
+                 "Broadcast/multicast — в пределах L2-сегмента.",
+            style="Hint.TLabel", justify="left").pack(anchor="w", pady=(10, 0))
+        ttk.Button(search_tab, text="Способы сканирования…",
+                   command=self.show_scan_methods).pack(fill="x", pady=(12, 0))
 
-        ttk.Checkbutton(proto, text="ONVIF WS-Discovery",
-                        variable=self.use_onvif).pack(anchor="w", pady=3)
+        # ---- вкладка «Доступ» ----
+        snmp_box = ttk.LabelFrame(access_tab, text=" SNMP ", padding=8)
+        snmp_box.pack(fill="x", pady=(0, 10))
+        ttk.Label(snmp_box, text="Community", style="Hint.TLabel").grid(
+            row=0, column=0, sticky="w")
+        self.community_entry = ttk.Entry(snmp_box, width=18)
+        self.community_entry.grid(row=1, column=0, sticky="ew", pady=(2, 8))
+        self.community_entry.insert(0, r.get("community", "public"))
+        ttk.Label(snmp_box, text="Версия", style="Hint.TLabel").grid(
+            row=2, column=0, sticky="w")
+        self.snmp_version = ttk.Combobox(
+            snmp_box, values=["v1", "v2c", "v3"], width=8, state="readonly")
+        self.snmp_version.grid(row=3, column=0, sticky="w", pady=(2, 0))
+        self.snmp_version.set(r.get("snmp_version", "v2c"))
+        snmp_box.columnconfigure(0, weight=1)
 
-        self.sadp_cb = ttk.Checkbutton(
-            proto, text="SADP (Hikvision)",
-            variable=self.use_sadp, command=self.on_sadp_toggle)
-        self.sadp_cb.pack(anchor="w", pady=3)
-        ttk.Label(proto,
-                  text="UDP multicast/broadcast; если Windows блокирует — запустите от администратора",
-                  style="Hint.TLabel", justify="left").pack(anchor="w", padx=(22, 0), pady=(0, 4))
-
-        ttk.Checkbutton(proto, text="Dahua / Amcrest",
-                        variable=self.use_dahua).pack(anchor="w", pady=3)
-
-        ttk.Checkbutton(proto, text="SSDP / UPnP",
-                        variable=self.use_ssdp).pack(anchor="w", pady=3)
-
-        ttk.Checkbutton(proto, text="mDNS / Bonjour",
-                        variable=self.use_mdns).pack(anchor="w", pady=3)
-
-        ttk.Checkbutton(proto, text="ARP (ping sweep)",
-                        variable=self.use_arp).pack(anchor="w", pady=3)
-
-        ttk.Checkbutton(proto, text="TCP port scan (80, 443, 554, 8000, …)",
-                        variable=self.use_portscan).pack(anchor="w", pady=3)
-
-        ttk.Checkbutton(proto, text="ISAPI probe (Hikvision HTTP)",
-                        variable=self.use_isapi).pack(anchor="w", pady=3)
+        onvif_box = ttk.LabelFrame(access_tab, text=" ONVIF ", padding=8)
+        onvif_box.pack(fill="x")
+        ttk.Label(onvif_box, text="Логин", style="Hint.TLabel").grid(
+            row=0, column=0, sticky="w")
+        self.onvif_user = ttk.Entry(onvif_box, width=18)
+        self.onvif_user.grid(row=1, column=0, sticky="ew", pady=(2, 8))
+        ttk.Label(onvif_box, text="Пароль", style="Hint.TLabel").grid(
+            row=2, column=0, sticky="w")
+        self.onvif_password = ttk.Entry(onvif_box, width=18, show="*")
+        self.onvif_password.grid(row=3, column=0, sticky="ew", pady=(2, 0))
+        onvif_box.columnconfigure(0, weight=1)
+        ttk.Label(
+            access_tab,
+            text="ONVIF-логин нужен для DeviceInfo и RTSP-ссылок.\n"
+                 "Пусто — будут только анонимные запросы.",
+            style="Hint.TLabel", justify="left").pack(anchor="w", pady=(10, 0))
 
         if self.elevated or is_admin():
             self.use_sadp.set(True)
 
-        # ---- Кнопки действий ----
-        btn_frame = ttk.Frame(left)
-        btn_frame.pack(fill="x", pady=(4, 0))
+        # ---------------------------- ЦЕНТР + КАРТОЧКА ----------------------------
+        pane = ttk.Panedwindow(content, orient="horizontal")
+        pane.pack(fill="both", expand=True)
 
-        self.scan_btn = ttk.Button(btn_frame, text="▶  Сканировать", command=self.start_scan)
-        self.scan_btn.pack(fill="x", ipady=3)
+        table_card = ttk.Frame(pane, style="Card.TFrame", padding=6)
+        pane.add(table_card, weight=1)
+        detail_card = ttk.Frame(pane, style="Card.TFrame", padding=10, width=340)
+        pane.add(detail_card, weight=0)
 
-        self.stop_btn = ttk.Button(btn_frame, text="■  Стоп", command=self.stop_scan,
-                                   state="disabled")
-        self.stop_btn.pack(fill="x", pady=(6, 0), ipady=3)
+        table_head = ttk.Frame(table_card, style="Card.TFrame")
+        table_head.pack(fill="x", pady=(0, 4))
+        ttk.Label(table_head, text="УСТРОЙСТВА", style="Section.TLabel").pack(side="left")
+        self.count_label = tk.StringVar(value="0")
+        ttk.Label(table_head, textvariable=self.count_label,
+                  style="Muted.TLabel").pack(side="right")
 
-        # ============================ ПРАВАЯ ПАНЕЛЬ ============================
-        right = ttk.Frame(main)
-        right.grid(row=1, column=1, sticky="nsew")
+        table_body = ttk.Frame(table_card, style="Card.TFrame")
+        table_body.pack(fill="both", expand=True)
 
-        tree_frame = ttk.LabelFrame(right, text=" Результаты ", padding=(6, 4))
-        tree_frame.pack(fill="both", expand=True)
-
-        columns = ("ip", "mac", "device", "protocol", "info")
-        self.tree = ttk.Treeview(tree_frame, columns=columns, show="headings")
-
-        self.tree.heading("ip", text="IP-адрес")
+        columns = ("ip", "mac", "device", "protocol")
+        self.tree = ttk.Treeview(table_body, columns=columns, show="headings")
+        self.tree.heading("ip", text="IP")
         self.tree.heading("mac", text="MAC")
         self.tree.heading("device", text="Устройство")
         self.tree.heading("protocol", text="Протоколы")
-        self.tree.heading("info", text="Информация")
-        self.tree.column("ip",       width=120, minwidth=100, stretch=False, anchor="w")
-        self.tree.column("mac",      width=135, minwidth=120, stretch=False, anchor="w")
-        self.tree.column("device",   width=190, minwidth=120, stretch=False, anchor="w")
-        self.tree.column("protocol", width=150, minwidth=110, stretch=False, anchor="w")
-        self.tree.column("info",     width=520, minwidth=200, stretch=True,  anchor="w")
-        self.tree.bind("<Double-1>", self.show_device_details)
+        self.tree.column("ip", width=100, minwidth=90, stretch=False, anchor="w")
+        self.tree.column("mac", width=130, minwidth=110, stretch=False, anchor="w")
+        self.tree.column("device", width=180, minwidth=130, stretch=True, anchor="w")
+        self.tree.column("protocol", width=130, minwidth=100, stretch=False, anchor="w")
+        self.tree.bind("<<TreeviewSelect>>", self._on_tree_select)
 
-        vsb = ttk.Scrollbar(tree_frame, orient="vertical", command=self.tree.yview)
-        hsb = ttk.Scrollbar(tree_frame, orient="horizontal", command=self.tree.xview)
-        self.tree.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
-
+        vsb = ttk.Scrollbar(table_body, orient="vertical", command=self.tree.yview)
+        self.tree.configure(yscrollcommand=vsb.set)
         self.tree.grid(row=0, column=0, sticky="nsew")
         vsb.grid(row=0, column=1, sticky="ns")
-        hsb.grid(row=1, column=0, sticky="ew")
+        table_body.rowconfigure(0, weight=1)
+        table_body.columnconfigure(0, weight=1)
 
-        tree_frame.rowconfigure(0, weight=1)
-        tree_frame.columnconfigure(0, weight=1)
+        ttk.Label(detail_card, text="КАРТОЧКА УСТРОЙСТВА",
+                  style="Section.TLabel").pack(anchor="w", pady=(0, 6))
+        self.detail_text = tk.Text(
+            detail_card, wrap="word", relief="flat", height=18, width=34,
+            background="#20262E", foreground="#E6EDF3",
+            insertbackground="#E6EDF3", font=("Segoe UI", 9),
+            padx=8, pady=8, borderwidth=0)
+        self.detail_text.pack(fill="both", expand=True)
+        self.detail_text.insert("1.0", "Выберите устройство в таблице.")
+        self.detail_text.config(state="disabled")
+        self.detail_buttons = ttk.Frame(detail_card, style="Card.TFrame")
+        self.detail_buttons.pack(fill="x", pady=(8, 0))
 
-        bottom = ttk.Frame(right)
-        bottom.pack(fill="x", pady=(8, 0))
-
-        ttk.Button(bottom, text="💾  Экспорт в CSV",
-                   command=self.export_csv).pack(side="left", ipadx=4, ipady=2)
-
-        self.copyright_label = ttk.Label(
-            bottom, text=APP_COPYRIGHT, anchor="center", style="Footer.TLabel")
-        self.copyright_label.pack(side="left", expand=True, fill="x", padx=12)
-
-        self.status_var = tk.StringVar(value="Готово")
-        ttk.Label(bottom, textvariable=self.status_var).pack(side="right")
+        def _place_sash():
+            try:
+                total = pane.winfo_width()
+                if total > 600:
+                    pane.sashpos(0, max(420, total - 340))
+            except tk.TclError:
+                pass
+        self.root.after(200, _place_sash)
 
     # --------------------------------------------------------------- меню
     def _build_menu(self):
@@ -443,13 +523,9 @@ class CameraScannerApp:
         menubar.add_cascade(label="Файл", menu=file_menu)
 
         view_menu = tk.Menu(menubar, tearoff=0)
-        self.theme_var = tk.StringVar(value=sv_ttk.get_theme())
-        view_menu.add_radiobutton(
-            label="Светлая тема", variable=self.theme_var, value="light",
-            command=lambda: self._set_theme("light"))
-        view_menu.add_radiobutton(
-            label="Тёмная тема", variable=self.theme_var, value="dark",
-            command=lambda: self._set_theme("dark"))
+        self.theme_var = tk.StringVar(value="dark")
+        view_menu.add_command(
+            label="Индустриальная тёмная", command=lambda: self._set_theme("dark"))
         menubar.add_cascade(label="Вид", menu=view_menu)
 
         # ---- Справка: два пункта ----
@@ -1134,13 +1210,83 @@ class CameraScannerApp:
         self.root.clipboard_clear()
         self.root.clipboard_append(value)
 
+    def _clear_details(self):
+        self.detail_text.config(state="normal")
+        self.detail_text.delete("1.0", "end")
+        self.detail_text.insert("1.0", "Выберите устройство в таблице.")
+        self.detail_text.config(state="disabled")
+        for child in self.detail_buttons.winfo_children():
+            child.destroy()
+
+    def _on_tree_select(self, event=None):
+        sel = self.tree.selection()
+        if not sel:
+            self._clear_details()
+            return
+        values = self.tree.item(sel[0], "values")
+        ip = values[0] if values else ""
+        dev = next((d for d in self.results if d.get("ip") == ip), None)
+        if dev:
+            self._render_details(dev)
+        else:
+            self._clear_details()
+
+    def _render_details(self, dev: dict):
+        for child in self.detail_buttons.winfo_children():
+            child.destroy()
+
+        urls = dev.get("rtsp_urls") or []
+        creds = dev.get("rtsp_credentials") or {}
+        lines = [
+            f"IP        {dev.get('ip') or '—'}",
+            f"MAC       {dev.get('mac') or '—'}",
+            f"Устройство {dev.get('device') or '—'}",
+            f"Протоколы  {dev.get('protocol') or '—'}",
+            f"Вендор     {dev.get('vendor') or '—'}",
+            f"Модель     {dev.get('model') or '—'}",
+            f"Прошивка   {dev.get('firmware') or '—'}",
+            f"Серийник   {dev.get('serial') or '—'}",
+            f"Веб        {dev.get('web_url') or '—'}",
+            "",
+            "RTSP:",
+        ]
+        lines += [f"  {u}" for u in urls] if urls else ["  —"]
+        if creds.get("user"):
+            lines += ["", "Учётные данные (из ONVIF/ручного ввода):",
+                      f"  Пользователь: {creds.get('user')}",
+                      "  Пароль: ••••••••"]
+        lines += ["", "Доказательства:", dev.get("info") or "—"]
+
+        self.detail_text.config(state="normal")
+        self.detail_text.delete("1.0", "end")
+        self.detail_text.insert("1.0", "\n".join(lines))
+        self.detail_text.config(state="disabled")
+
+        def add(text, command, style="TButton"):
+            b = ttk.Button(self.detail_buttons, text=text, command=command, style=style)
+            b.pack(fill="x", pady=2)
+            return b
+
+        if urls:
+            add("▶  Смотреть поток", lambda: self._open_stream(urls, creds, dev),
+                style="Accent.TButton")
+        add("Копировать IP", lambda: self._copy(dev.get("ip", "")))
+        if urls:
+            add("Копировать RTSP", lambda: self._copy(urls[0]))
+        if creds.get("user"):
+            add("Показать пароль", lambda: self._show_password(creds))
+            if urls:
+                add("Копировать RTSP с паролем",
+                    lambda: self._copy_rtsp_with_password(urls, creds))
+        if dev.get("web_url"):
+            add("Открыть веб", lambda: webbrowser.open(dev["web_url"]))
+
     def update_treeview(self, stopped: bool = False):
         self.tree.delete(*self.tree.get_children())
         for dev in self.results:
             values = (
                 dev.get("ip", ""), dev.get("mac", ""),
                 dev.get("device", ""), dev.get("protocol", ""),
-                dev.get("info", ""),
             )
             if dev.get("ip"):
                 self.tree.insert("", "end", iid=dev["ip"], values=values)
@@ -1148,6 +1294,13 @@ class CameraScannerApp:
                 self.tree.insert("", "end", values=values)
         self.scan_btn.config(state="normal")
         self.stop_btn.config(state="disabled")
+        self.count_label.set(f"{len(self.results)}")
+        rows = self.tree.get_children()
+        if rows:
+            self.tree.selection_set(rows[0])
+            self._on_tree_select()
+        else:
+            self._clear_details()
         unique_ips = {dev.get("ip") for dev in self.results if dev.get("ip")}
         if stopped:
             self.status_var.set(
