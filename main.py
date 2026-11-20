@@ -36,7 +36,7 @@ from mdns_scanner import discover_mdns
 
 # ------------------------------------------------------------------ constants
 APP_NAME = "CameraScanner"
-APP_VERSION = "1.4.3"
+APP_VERSION = "1.4.4"
 APP_AUTHOR = "Andrew Genben"
 APP_COPYRIGHT = f"© 2025–2026 {APP_AUTHOR}. Все права защищены."
 APP_DESCRIPTION = (
@@ -1003,7 +1003,7 @@ class CameraScannerApp:
         win = tk.Toplevel(self.root)
         win.title(f"Устройство {ip or '—'}")
         win.transient(self.root)
-        win.geometry("620x420")
+        win.geometry("780x540")
         text = tk.Text(win, wrap="word", padx=12, pady=12)
         text.pack(fill="both", expand=True)
         lines = [
@@ -1036,23 +1036,32 @@ class CameraScannerApp:
 
         bar = ttk.Frame(win, padding=(12, 0, 12, 12))
         bar.pack(fill="x")
+
+        first = ttk.Frame(bar)
+        first.pack(fill="x")
         if ip:
-            ttk.Button(bar, text="Копировать IP", command=lambda: self._copy(ip)).pack(side="left")
+            ttk.Button(first, text="Копировать IP",
+                       command=lambda: self._copy(ip)).pack(side="left")
         if urls:
-            ttk.Button(bar, text="Копировать RTSP",
+            ttk.Button(first, text="Копировать RTSP",
                        command=lambda: self._copy(urls[0])).pack(side="left", padx=6)
+        if dev.get("web_url"):
+            ttk.Button(first, text="Открыть веб",
+                       command=lambda: webbrowser.open(dev["web_url"])).pack(side="left")
+        ttk.Button(first, text="Закрыть", command=win.destroy).pack(side="right")
+
         if creds.get("user"):
-            ttk.Button(bar, text="Показать пароль",
-                       command=lambda: self._show_password(creds)).pack(side="left", padx=6)
+            cred_bar = ttk.Frame(bar)
+            cred_bar.pack(fill="x", pady=(8, 0))
+            ttk.Button(
+                cred_bar, text="Показать пароль",
+                command=lambda: self._show_password(creds),
+            ).pack(side="left")
             if urls:
                 ttk.Button(
-                    bar, text="Копировать RTSP с паролем",
+                    cred_bar, text="Копировать RTSP с паролем",
                     command=lambda: self._copy_rtsp_with_password(urls, creds),
                 ).pack(side="left", padx=6)
-        if dev.get("web_url"):
-            ttk.Button(bar, text="Открыть веб",
-                       command=lambda: webbrowser.open(dev["web_url"])).pack(side="left")
-        ttk.Button(bar, text="Закрыть", command=win.destroy).pack(side="right")
 
     def _copy_rtsp_with_password(self, urls: list[str], creds: dict):
         """Копирует рабочий RTSP-URL, подставляя пароль из ONVIF-ответа."""
