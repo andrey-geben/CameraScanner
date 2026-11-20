@@ -11,6 +11,7 @@ from PyInstaller.utils.hooks import collect_submodules, collect_data_files, coll
 
 # ---------------------------------------------------------------- пути к ресурсам
 ICON_PATH = os.path.join(SPECPATH, "assets", "app.ico")
+OUI_PATH = os.path.join(SPECPATH, "assets", "oui.csv.gz")
 if not os.path.isfile(ICON_PATH):
     raise SystemExit(
         f"[CameraScanner.spec] Не найден файл иконки: {ICON_PATH}\n"
@@ -44,6 +45,7 @@ hiddenimports += ["av", "av.video", "PIL.ImageTk", "PIL.Image"]
 # ----------------------------------------------------------------------- datas
 datas = [
     (ICON_PATH, "assets"),
+    (OUI_PATH, "assets"),
 ]
 # Добавляем файлы темы sv_ttk (sv.tcl и ресурсы)
 datas += collect_data_files("sv_ttk")

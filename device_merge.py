@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import ipaddress
 
+from oui_lookup import lookup_vendor
+
 
 def _ip_key(ip: str):
     try:
@@ -23,13 +25,18 @@ def merge_devices(rows: list[dict]) -> list[dict]:
             continue
         d = devices.setdefault(ip, {
             "ip": ip, "mac": "", "vendor": "", "model": "", "firmware": "",
-            "serial": "", "protocols": [], "info": [], "rtsp_urls": [],
-            "rtsp_credentials": {}, "web_url": "", "type": "",
+            "serial": "", "oui_vendor": "", "protocols": [], "info": [],
+            "rtsp_urls": [], "rtsp_credentials": {}, "web_url": "", "type": "",
         })
         for key in ("mac", "vendor", "model", "firmware", "serial", "web_url", "type"):
             val = (row.get(key) or "").strip()
             if val and not d[key]:
                 d[key] = val
+        oui = lookup_vendor(d["mac"])
+        if oui and not d["oui_vendor"]:
+            d["oui_vendor"] = oui
+            if not d["vendor"]:
+                d["vendor"] = oui
         proto = (row.get("protocol") or "").strip()
         if proto and proto not in d["protocols"]:
             d["protocols"].append(proto)

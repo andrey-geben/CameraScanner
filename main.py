@@ -37,7 +37,7 @@ from stream_player import StreamPlayerWindow
 
 # ------------------------------------------------------------------ constants
 APP_NAME = "CameraScanner"
-APP_VERSION = "1.6.1"
+APP_VERSION = "1.7.0"
 APP_AUTHOR = "Andrew Genben"
 APP_COPYRIGHT = f"© 2025–2026 {APP_AUTHOR}. Все права защищены."
 APP_DESCRIPTION = (
@@ -460,26 +460,25 @@ class CameraScannerApp:
         table_head.pack(fill="x", pady=(0, 4))
         ttk.Label(table_head, text="УСТРОЙСТВА", style="Section.TLabel").pack(side="left")
         self.count_label = tk.StringVar(value="0")
-        self.info_btn = ttk.Button(table_head, text="Информация",
-                                   command=self.show_device_details, state="disabled")
-        self.info_btn.pack(side="right", padx=(8, 0))
         ttk.Label(table_head, textvariable=self.count_label,
-                  style="Muted.TLabel").pack(side="right", padx=(0, 8))
+                  style="Muted.TLabel").pack(side="right")
 
         table_body = ttk.Frame(table_card, style="Card.TFrame")
         table_body.pack(fill="both", expand=True)
 
-        columns = ("ip", "mac", "device", "protocol")
+        columns = ("ip", "mac", "device", "protocol", "action")
         self.tree = ttk.Treeview(table_body, columns=columns, show="headings")
         self.tree.heading("ip", text="IP")
         self.tree.heading("mac", text="MAC")
         self.tree.heading("device", text="Устройство")
         self.tree.heading("protocol", text="Протоколы")
+        self.tree.heading("action", text="Инфо")
         self.tree.column("ip", width=120, minwidth=100, stretch=False, anchor="w")
         self.tree.column("mac", width=150, minwidth=120, stretch=False, anchor="w")
         self.tree.column("device", width=280, minwidth=160, stretch=True, anchor="w")
-        self.tree.column("protocol", width=180, minwidth=120, stretch=False, anchor="w")
-        self.tree.bind("<<TreeviewSelect>>", self._on_tree_select)
+        self.tree.column("protocol", width=170, minwidth=110, stretch=False, anchor="w")
+        self.tree.column("action", width=105, minwidth=90, stretch=False, anchor="center")
+        self.tree.bind("<Button-1>", self._on_tree_click)
         self.tree.bind("<Double-1>", self.show_device_details)
 
         vsb = ttk.Scrollbar(table_body, orient="vertical", command=self.tree.yview)
@@ -1066,6 +1065,7 @@ class CameraScannerApp:
             f"Устройство: {dev.get('device') or '—'}",
             f"Протоколы: {dev.get('protocol') or '—'}",
             f"Вендор: {dev.get('vendor') or '—'}",
+            f"OUI (MAC): {dev.get('oui_vendor') or '—'}",
             f"Модель: {dev.get('model') or '—'}",
             f"Прошивка: {dev.get('firmware') or '—'}",
             f"Серийник: {dev.get('serial') or '—'}",
@@ -1188,9 +1188,19 @@ class CameraScannerApp:
         self.root.clipboard_append(value)
 
     def _on_tree_select(self, event=None):
-        sel = self.tree.selection()
-        if getattr(self, "info_btn", None) is not None:
-            self.info_btn.config(state="normal" if sel else "disabled")
+        return
+
+    def _on_tree_click(self, event=None):
+        if event is None:
+            return
+        row = self.tree.identify_row(event.y)
+        col = self.tree.identify_column(event.x)
+        if not row:
+            return
+        # последняя колонка — «Открыть»
+        if col == f"#{len(self.tree['columns'])}":
+            self.tree.selection_set(row)
+            self.show_device_details()
 
     def update_treeview(self, stopped: bool = False):
         self.tree.delete(*self.tree.get_children())
@@ -1198,6 +1208,7 @@ class CameraScannerApp:
             values = (
                 dev.get("ip", ""), dev.get("mac", ""),
                 dev.get("device", ""), dev.get("protocol", ""),
+                "Открыть",
             )
             if dev.get("ip"):
                 self.tree.insert("", "end", iid=dev["ip"], values=values)
@@ -1209,7 +1220,6 @@ class CameraScannerApp:
         rows = self.tree.get_children()
         if rows:
             self.tree.selection_set(rows[0])
-        self._on_tree_select()
         unique_ips = {dev.get("ip") for dev in self.results if dev.get("ip")}
         if stopped:
             self.status_var.set(
