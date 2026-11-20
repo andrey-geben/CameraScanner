@@ -37,7 +37,7 @@ from stream_player import StreamPlayerWindow
 
 # ------------------------------------------------------------------ constants
 APP_NAME = "CameraScanner"
-APP_VERSION = "1.7.0"
+APP_VERSION = "1.8.0"
 APP_AUTHOR = "Andrew Genben"
 APP_COPYRIGHT = f"© 2025–2026 {APP_AUTHOR}. Все права защищены."
 APP_DESCRIPTION = (
@@ -448,6 +448,13 @@ class CameraScannerApp:
             text="ONVIF-логин нужен для DeviceInfo и RTSP-ссылок.\n"
                  "Пусто — будут только анонимные запросы.",
             style="Hint.TLabel", justify="left").pack(anchor="w", pady=(10, 0))
+        self.online_oui = tk.BooleanVar(value=r.get("online_oui", False))
+        ttk.Checkbutton(access_tab, text="Уточнять вендора по MAC онлайн",
+                        variable=self.online_oui).pack(anchor="w", pady=(10, 2))
+        ttk.Label(access_tab,
+                  text="MAC отправляется на maclookup.app;\n"
+                       "при недоступности — локальный справочник IEEE.",
+                  style="Hint.TLabel", justify="left").pack(anchor="w")
 
         if self.elevated or is_admin():
             self.use_sadp.set(True)
@@ -798,6 +805,7 @@ class CameraScannerApp:
             "mdns": self.use_mdns.get(),
             "onvif_user": self.onvif_user.get().strip(),
             "onvif_password": self.onvif_password.get(),
+            "online_oui": self.online_oui.get(),
         }
         self._scan_thread = threading.Thread(
             target=self.run_scan, args=(settings,), daemon=True)
@@ -1037,7 +1045,9 @@ class CameraScannerApp:
 
         if se.is_set():
             stopped = True
-        self.results = merge_devices(all_devices)
+        if settings.get("online_oui"):
+            self._set_status("OUI: запрос онлайн-справочника…")
+        self.results = merge_devices(all_devices, online=settings.get("online_oui", False))
         self.root.after(0, lambda: self.update_treeview(stopped))
 
     def _set_status(self, text: str):

@@ -13,7 +13,7 @@ def _ip_key(ip: str):
         return (1, ip)
 
 
-def merge_devices(rows: list[dict]) -> list[dict]:
+def merge_devices(rows: list[dict], online: bool = False) -> list[dict]:
     """Один IP -> одна запись; протоколы и доказательства объединяются."""
     devices: dict[str, dict] = {}
     orphans: list[dict] = []
@@ -32,7 +32,7 @@ def merge_devices(rows: list[dict]) -> list[dict]:
             val = (row.get(key) or "").strip()
             if val and not d[key]:
                 d[key] = val
-        oui = lookup_vendor(d["mac"])
+        oui = lookup_vendor(d["mac"], online=online)
         if oui and not d["oui_vendor"]:
             d["oui_vendor"] = oui
             if not d["vendor"]:

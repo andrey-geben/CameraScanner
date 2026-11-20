@@ -3,10 +3,13 @@ from __future__ import annotations
 
 import csv
 import gzip
+import json
 import os
 import sys
+import urllib.request
 
 _cache: dict[str, str] | None = None
+_online_cache: dict[str, str] = {}
 
 
 def _data_path() -> str:
@@ -40,9 +43,33 @@ def normalize_mac(mac: str) -> str:
     return "".join(ch for ch in (mac or "").upper() if ch in "0123456789ABCDEF")
 
 
-def lookup_vendor(mac: str) -> str:
-    """Возвращает организацию IEEE для первых 24 бит MAC или пустую строку."""
+def _online_lookup(mac: str, timeout: float = 3.0) -> str:
     prefix = normalize_mac(mac)[:6]
     if len(prefix) != 6:
         return ""
+    if prefix in _online_cache:
+        return _online_cache[prefix]
+    url = f"https://api.maclookup.app/v2/macs/{prefix}"
+    try:
+        req = urllib.request.Request(
+            url, headers={"User-Agent": "CameraScanner/1.8", "Accept": "application/json"}
+        )
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            data = json.loads(resp.read(8192).decode("utf-8", "ignore"))
+        company = (data.get("company") or "").strip() if data.get("found") else ""
+    except Exception:
+        company = ""
+    _online_cache[prefix] = company
+    return company
+
+
+def lookup_vendor(mac: str, online: bool = False) -> str:
+    """Вендор по MAC: сначала онлайн (если включено), затем локальный IEEE."""
+    prefix = normalize_mac(mac)[:6]
+    if len(prefix) != 6:
+        return ""
+    if online:
+        company = _online_lookup(mac)
+        if company:
+            return company
     return _load().get(prefix, "")
