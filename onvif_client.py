@@ -4,6 +4,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import re
+import urllib.parse
 import os
 import ssl
 import urllib.error
@@ -21,6 +22,34 @@ def redact_rtsp_url(url: str) -> str:
     url = re.sub(r"(?i)(password=)[^&;]+", r"\1***", url)
     url = re.sub(r"(?i)(://[^/@:]+:)[^/@]+@", r"\1***@", url)
     return url
+
+
+def extract_rtsp_credentials(urls: list[str]) -> dict:
+    """Достаёт логин/пароль, которые некоторые камеры кладут в RTSP-URL.
+
+    Это не подбор: камера сама возвращает их в GetStreamUri. Использовать
+    только для собственного устройства; на экран по умолчанию не выводим.
+    """
+    for url in urls or []:
+        user = password = None
+        m = re.match(r"rtsp://([^/@:]+):([^/@]+)@", url)
+        if m:
+            user = urllib.parse.unquote(m.group(1))
+            password = urllib.parse.unquote(m.group(2))
+        if not user:
+            m = re.search(r"(?:[?&/]|^)user=([^&_/]+)", url)
+            if m:
+                user = urllib.parse.unquote(m.group(1))
+        if not password:
+            m = re.search(r"(?:[?&/]|_)password=([^&]+)", url)
+            if m:
+                password = m.group(1)
+                for stop in ("_channel=", "_stream=", "&"):
+                    password = password.split(stop)[0]
+                password = urllib.parse.unquote(password)
+        if user and password:
+            return {"user": user, "password": password, "source": "ONVIF GetStreamUri"}
+    return {}
 
 
 def _local(tag: str) -> str:
@@ -156,14 +185,16 @@ def enrich(xaddr: str, user: str | None = None, password: str | None = None,
     info = get_device_information(xaddr, user, password, timeout)
     media = get_media_xaddr(xaddr, user, password, timeout)
     tokens = get_profiles(media, user, password, timeout) if media else []
-    uris = []
+    raw_uris = []
     for token in tokens[:2]:
         uri = get_stream_uri(media, token, user, password, timeout)
         if uri:
-            uris.append(redact_rtsp_url(uri))
+            raw_uris.append(uri)
+    creds = extract_rtsp_credentials(raw_uris)
     return {
         **info,
-        "rtsp_urls": uris,
+        "rtsp_urls": [redact_rtsp_url(u) for u in raw_uris],
+        "rtsp_credentials": creds,
         "onvif_media": media or "",
         "onvif_profiles": tokens,
     }

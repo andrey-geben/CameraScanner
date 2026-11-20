@@ -35,7 +35,7 @@ from mdns_scanner import discover_mdns
 
 # ------------------------------------------------------------------ constants
 APP_NAME = "CameraScanner"
-APP_VERSION = "1.4.1"
+APP_VERSION = "1.4.2"
 APP_AUTHOR = "Andrew Genben"
 APP_COPYRIGHT = f"© 2025–2026 {APP_AUTHOR}. Все права защищены."
 APP_DESCRIPTION = (
@@ -874,6 +874,7 @@ class CameraScannerApp:
                     "firmware": dev.get("firmware", ""),
                     "serial": dev.get("serial", ""),
                     "rtsp_urls": dev.get("rtsp_urls", []),
+                    "rtsp_credentials": dev.get("rtsp_credentials", {}),
                 })
                 found_ips.add(dev["ip"])
 
@@ -1019,6 +1020,15 @@ class CameraScannerApp:
         ]
         urls = dev.get("rtsp_urls") or []
         lines += [f"  {u}" for u in urls] if urls else ["  —"]
+        creds = dev.get("rtsp_credentials") or {}
+        if creds.get("user"):
+            lines += [
+                "",
+                "Учётные данные из ONVIF-ответа камеры:",
+                f"  Пользователь: {creds.get('user', '—')}",
+                "  Пароль: ••••••••",
+                "  ⚠ Это данные самого устройства. Не публикуйте их.",
+            ]
         lines += ["", "Доказательства:", dev.get("info") or "—"]
         text.insert("1.0", "\n".join(lines))
         text.config(state="disabled")
@@ -1030,9 +1040,35 @@ class CameraScannerApp:
         if urls:
             ttk.Button(bar, text="Копировать RTSP",
                        command=lambda: self._copy(urls[0])).pack(side="left", padx=6)
+        if creds.get("user"):
+            ttk.Button(bar, text="Показать пароль",
+                       command=lambda: self._show_password(creds)).pack(side="left", padx=6)
         if dev.get("web_url"):
             ttk.Button(bar, text="Открыть веб",
                        command=lambda: webbrowser.open(dev["web_url"])).pack(side="left")
+        ttk.Button(bar, text="Закрыть", command=win.destroy).pack(side="right")
+
+    def _show_password(self, creds: dict):
+        win = tk.Toplevel(self.root)
+        win.title("Учётные данные ONVIF")
+        win.transient(self.root)
+        win.resizable(False, False)
+        frame = ttk.Frame(win, padding=16)
+        frame.pack(fill="both", expand=True)
+        ttk.Label(frame, text="Логин:").grid(row=0, column=0, sticky="w")
+        ttk.Label(frame, text=creds.get("user", "")).grid(row=0, column=1, sticky="w", padx=8)
+        ttk.Label(frame, text="Пароль:").grid(row=1, column=0, sticky="w", pady=(8, 0))
+        entry = ttk.Entry(frame, width=32)
+        entry.insert(0, creds.get("password", ""))
+        entry.configure(state="readonly")
+        entry.grid(row=1, column=1, sticky="w", padx=8, pady=(8, 0))
+        ttk.Label(frame, text="Получено из ответа камеры. Не публикуйте; смените пароль.",
+                  style="Hint.TLabel", wraplength=380).grid(
+            row=2, column=0, columnspan=2, sticky="w", pady=(10, 0))
+        bar = ttk.Frame(frame)
+        bar.grid(row=3, column=0, columnspan=2, sticky="ew", pady=(12, 0))
+        ttk.Button(bar, text="Копировать пароль",
+                   command=lambda: self._copy(creds.get("password", ""))).pack(side="left")
         ttk.Button(bar, text="Закрыть", command=win.destroy).pack(side="right")
 
     def _copy(self, value: str):
@@ -1074,7 +1110,7 @@ class CameraScannerApp:
             for dev in self.results:
                 rows.append({
                     k: (", ".join(v) if isinstance(v, list) else v)
-                    for k, v in dev.items()
+                    for k, v in dev.items() if k != "rtsp_credentials"
                 })
             export_to_csv(rows, filename)
             messagebox.showinfo("Экспорт", f"Данные сохранены в {filename}")

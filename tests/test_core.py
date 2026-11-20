@@ -73,6 +73,17 @@ class CameraScannerTests(unittest.TestCase):
         self.assertIn("password=***", safe)
         self.assertNotIn("secret", safe)
 
+
+    def test_extract_rtsp_credentials(self):
+        from onvif_client import extract_rtsp_credentials
+        c = extract_rtsp_credentials([
+            "rtsp://h:554/user=bob_password=s3cret_channel=0_stream=0&onvif=0.sdp",
+        ])
+        self.assertEqual(c["user"], "bob")
+        self.assertEqual(c["password"], "s3cret")
+        q = extract_rtsp_credentials(["rtsp://h:554/stream?user=alice&password=pw123&channel=1"])
+        self.assertEqual((q["user"], q["password"]), ("alice", "pw123"))
+
     def test_ico_exists(self):
         ok, info = main.validate_ico(main.resource_path("assets/app.ico"))
         self.assertTrue(ok, info)
