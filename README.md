@@ -5,7 +5,7 @@
 [![Python](https://img.shields.io/badge/Python-3.12%2B-blue?logo=python&logoColor=white)](https://www.python.org/)
 [![Platform](https://img.shields.io/badge/Platform-Windows%2010%2F11-0078D6?logo=windows&logoColor=white)]()
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-1.4.0-blue)]()
+[![Version](https://img.shields.io/badge/Version-1.4.1-blue)]()
 
 **CameraScanner** — настольное приложение для быстрого поиска IP-камер и сетевых видеорегистраторов в локальной сети. Поддерживает семь независимых протоколов обнаружения — от быстрых broadcast/multicast до активного перебора адресов и портов, что позволяет находить камеры, у которых отключены штатные службы обнаружения.
 
@@ -35,7 +35,7 @@
 ### Дополнительно
 
 - 🖥️ **Современный интерфейс** на Sun Valley (тема Windows 11) с переключением светлая/тёмная.
-- 🔒 **Запрос прав администратора по требованию** — только при включении SADP. Все параметры формы сохраняются при UAC-перезапуске.
+- SADP работает обычными UDP-сокетами; права администратора обычно не нужны. Если Windows блокирует broadcast — запустите от администратора.
 - ⚠️ **Модальное предупреждение перед сканированием** — напоминает, что сетевой скан виден службам ИБ и должен быть согласован.
 - 🛑 **Кнопка «Стоп»** — прерывает сканирование с сохранением уже найденных результатов.
 - 📊 **Экспорт в CSV** — все поля всех протоколов в одной таблице.
@@ -50,7 +50,7 @@
 - **ОС:** Windows 10 (1809+) или Windows 11 (x64)
 - **Python:** 3.12+
 - **Сеть:** доступ в локальный сегмент, где находятся камеры
-- **Права:** обычные — для всех протоколов, кроме SADP; для SADP — администратор
+- **Права:** обычные; SADP обычно тоже работает без администратора
 - **Среда:** Microsoft Visual C++ Redistributable 2015–2022 (x64) — обычно уже установлен, но на «чистых» системах может потребоваться
 
 > ⚠️ **Multicast/broadcast не проходят через маршрутизатор.** ONVIF/SADP/Dahua находят устройства только в том же L2-сегменте (VLAN). Для поиска за роутером используйте SNMP-перебор по подсети (при условии, что SNMP открыт).
@@ -104,9 +104,9 @@ pip install -r requirements.txt
 python main.py
 ```
 
-### С правами администратора (для SADP)
+### Если Windows блокирует SADP
 
-Либо поставьте галочку **«SADP (Hikvision)»** в интерфейсе — приложение само вызовет UAC и перезапустится с сохранением всех настроек. Либо запустите сразу:
+SADP обычно работает без UAC. Если broadcast блокируется, запустите приложение от администратора:
 
 ```bash
 python main.py --elevated
@@ -157,7 +157,7 @@ python main.py --elevated
 2. **ARP ping sweep** — находит живые хосты
 3. **TCP port scan** — уточняет тип устройства по открытым портам
 4. **ONVIF WS-Discovery**
-5. **SADP** (если включён и есть админ)
+5. **SADP** (если включён)
 6. **Dahua**
 7. **ISAPI probe** — финальный проход по всем найденным IP
 
@@ -236,7 +236,7 @@ CameraScanner/
 | `ModuleNotFoundError: No module named 'darkdetect'` | Пакет не установлен | `pip install darkdetect` |
 | Иконка в exe старая / Python-перо | Кэш Explorer, либо `.ico` — переименованный PNG | `ie4uinit.exe -show`, проверить `certutil -dump assets\app.ico` |
 | Камеры не находятся «Автообнаружением» | Multicast/broadcast не проходит через VLAN | Использовать режим «Подсеть» + SNMP |
-| SADP ничего не находит | Нет прав администратора или брандмауэр блокирует UDP/37020 | Включить чекбокс SADP, согласиться на UAC, добавить exe в исключения firewall |
+| SADP ничего не находит | Брандмауэр блокирует UDP/37020 или multicast | Добавить exe в исключения firewall; при необходимости запустить от администратора |
 | SNMP возвращает `NoSuchObject` в exe | В spec не попал нужный MIB | Добавить имя в `hiddenimports` (`pysnmp.smi.mibs.IF-MIB`) и пересобрать |
 | `_tkinter.TclError: invalid command name "…canvas"` при прокрутке | Старая версия с глобальным `bind_all("<MouseWheel>")` | Обновиться до v1.3.0 — там привязка колеса снимается при закрытии окна |
 | `VCRUNTIME140.dll is missing` на другой машине | Отсутствует Visual C++ Redistributable | Установить [vc_redist.x64.exe](https://aka.ms/vs/17/release/vc_redist.x64.exe) |

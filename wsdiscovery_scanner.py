@@ -45,7 +45,7 @@ def _library_multicast(timeout: float, stop_event: threading.Event | None = None
     if stop_event and stop_event.is_set():
         return []
 
-    wsd = WSDiscovery(relates_to=True)
+    wsd = WSDiscovery()
     wsd.start()
     try:
         services = wsd.searchServices(

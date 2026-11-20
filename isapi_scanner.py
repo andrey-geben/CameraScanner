@@ -87,8 +87,9 @@ def isapi_probe(ip: str, timeout: float = 2.0) -> dict | None:
                 **realm_info,
             }
 
-        # 200 без DeviceInfo, 404 — тоже Hikvision-подобное
-        if status in (200, 404, 403):
+        # Без 401/DeviceInfo это может быть любой веб-сервер:
+        # не выдаём его за Hikvision (раньше были ложные срабатывания).
+        if status in (200, 404, 403) and "hikvision" in headers.get("server", "").lower():
             return {
                 "ip": ip,
                 "scheme": scheme,

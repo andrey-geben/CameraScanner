@@ -64,6 +64,15 @@ class CameraScannerTests(unittest.TestCase):
         self.assertEqual(h["st"], "upnp:rootdevice")
         self.assertIn("server", h)
 
+
+    def test_rtsp_password_redacted(self):
+        from onvif_client import redact_rtsp_url
+        url = "rtsp://192.168.1.87:554/user=andrew_password=secret_channel=0_stream=0.sdp"
+        safe = redact_rtsp_url(url)
+        self.assertNotIn("secret_channel", safe)
+        self.assertIn("password=***", safe)
+        self.assertNotIn("secret", safe)
+
     def test_ico_exists(self):
         ok, info = main.validate_ico(main.resource_path("assets/app.ico"))
         self.assertTrue(ok, info)

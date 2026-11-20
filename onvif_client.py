@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import re
 import os
 import ssl
 import urllib.error
@@ -13,6 +14,13 @@ from xml.sax.saxutils import escape
 
 _NS_TDS = "http://www.onvif.org/ver10/device/wsdl"
 _NS_TRT = "http://www.onvif.org/ver10/media/wsdl"
+
+
+def redact_rtsp_url(url: str) -> str:
+    """Не показываем пароль из URL, который некоторые камеры кладут в GetStreamUri."""
+    url = re.sub(r"(?i)(password=)[^&;]+", r"\1***", url)
+    url = re.sub(r"(?i)(://[^/@:]+:)[^/@]+@", r"\1***@", url)
+    return url
 
 
 def _local(tag: str) -> str:
@@ -152,7 +160,7 @@ def enrich(xaddr: str, user: str | None = None, password: str | None = None,
     for token in tokens[:2]:
         uri = get_stream_uri(media, token, user, password, timeout)
         if uri:
-            uris.append(uri)
+            uris.append(redact_rtsp_url(uri))
     return {
         **info,
         "rtsp_urls": uris,

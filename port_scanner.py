@@ -14,6 +14,7 @@ DEFAULT_PORTS: dict[int, str] = {
     8443:  "https-alt",
     37777: "dahua-sdk",
     34567: "xmeye-sdk",
+    8899:  "onvif-alt",
 }
 
 

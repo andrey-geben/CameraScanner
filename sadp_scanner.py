@@ -27,7 +27,7 @@ def _is_admin() -> bool:
 
 def discover_hikvision_sadp(timeout: float = 5.0,
                             broadcast: bool = True,
-                            require_admin: bool = True,
+                            require_admin: bool = False,
                             stop_event: threading.Event | None = None) -> list[dict]:
     if require_admin and not _is_admin():
         raise PermissionError("SADP discovery requires administrator privileges")

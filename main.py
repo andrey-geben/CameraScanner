@@ -35,7 +35,7 @@ from mdns_scanner import discover_mdns
 
 # ------------------------------------------------------------------ constants
 APP_NAME = "CameraScanner"
-APP_VERSION = "1.4.0"
+APP_VERSION = "1.4.1"
 APP_AUTHOR = "Andrew Genben"
 APP_COPYRIGHT = f"© 2025–2026 {APP_AUTHOR}. Все права защищены."
 APP_DESCRIPTION = (
@@ -349,7 +349,7 @@ class CameraScannerApp:
             variable=self.use_sadp, command=self.on_sadp_toggle)
         self.sadp_cb.pack(anchor="w", pady=3)
         ttk.Label(proto,
-                  text="требует прав администратора; при включении будет запрос UAC",
+                  text="UDP multicast/broadcast; если Windows блокирует — запустите от администратора",
                   style="Hint.TLabel", justify="left").pack(anchor="w", padx=(22, 0), pady=(0, 4))
 
         ttk.Checkbutton(proto, text="Dahua / Amcrest",
@@ -710,38 +710,9 @@ class CameraScannerApp:
 
     # ------------------------------------------------------------------ UAC
     def on_sadp_toggle(self):
-        if not self.use_sadp.get():
-            return
-        if is_admin():
-            return
-        answer = messagebox.askyesno(
-            "Требуются права администратора",
-            "Для сканирования SADP (Hikvision) необходимы права администратора.\n\n"
-            "Перезапустить приложение с повышением прав?",
-            parent=self.root,
-        )
-        if answer:
-            extra = [
-                "--subnet", self.subnet_entry.get(),
-                "--community", self.community_entry.get(),
-                "--snmp-version", self.snmp_version.get(),
-                "--auto", "1" if self.auto_discovery.get() else "0",
-                "--snmp", "1" if self.use_snmp.get() else "0",
-                "--onvif", "1" if self.use_onvif.get() else "0",
-                "--dahua", "1" if self.use_dahua.get() else "0",
-                "--arp", "1" if self.use_arp.get() else "0",
-                "--portscan", "1" if self.use_portscan.get() else "0",
-                "--isapi", "1" if self.use_isapi.get() else "0",
-            ]
-            if relaunch_as_admin(extra):
-                self.root.destroy()
-            else:
-                messagebox.showerror("Ошибка UAC",
-                                     "Не удалось запросить повышение прав.",
-                                     parent=self.root)
-                self.use_sadp.set(False)
-        else:
-            self.use_sadp.set(False)
+        # SADP работает обычными UDP-сокетами и на практике не требует UAC.
+        # Если конкретная система заблокирует broadcast, это проявится как ошибка в результате.
+        return
 
     # -------------------------------------------------------------- Scanning
     def start_scan(self):
@@ -936,26 +907,22 @@ class CameraScannerApp:
         if not stopped and se.is_set():
             stopped = True
         if not stopped and settings['sadp']:
-            if not is_admin():
+            self._set_status("SADP: поиск…")
+            try:
+                for dev in discover_hikvision_sadp(timeout=5.0, broadcast=True, stop_event=se):
+                    all_devices.append({
+                        "ip": dev["ip"], "mac": dev.get("mac", ""),
+                        "protocol": "SADP", "vendor": "Hikvision",
+                        "model": dev.get("model", ""),
+                        "firmware": dev.get("firmware", ""),
+                        "serial": dev.get("serial", ""),
+                        "info": (f"SN: {dev['serial']}, Model: {dev['model']}, "
+                                 f"FW: {dev['firmware']}, Activated: {dev['activated']}"),
+                    })
+                    found_ips.add(dev["ip"])
+            except Exception as exc:
                 all_devices.append({"ip": "", "mac": "", "protocol": "SADP",
-                                    "info": "Пропущено: нет прав администратора"})
-            else:
-                self._set_status("SADP: поиск…")
-                try:
-                    for dev in discover_hikvision_sadp(timeout=5.0, broadcast=True, stop_event=se):
-                        all_devices.append({
-                            "ip": dev["ip"], "mac": dev.get("mac", ""),
-                            "protocol": "SADP", "vendor": "Hikvision",
-                            "model": dev.get("model", ""),
-                            "firmware": dev.get("firmware", ""),
-                            "serial": dev.get("serial", ""),
-                            "info": (f"SN: {dev['serial']}, Model: {dev['model']}, "
-                                     f"FW: {dev['firmware']}, Activated: {dev['activated']}"),
-                        })
-                        found_ips.add(dev["ip"])
-                except Exception as exc:
-                    all_devices.append({"ip": "", "mac": "", "protocol": "SADP",
-                                        "info": f"Ошибка: {exc}"})
+                                    "info": f"Ошибка: {exc}"})
 
         # Dahua
         if not stopped and se.is_set():
