@@ -3,6 +3,7 @@ import argparse
 import ctypes
 import ipaddress
 import os
+import queue
 import subprocess
 import sys
 import threading
@@ -37,7 +38,7 @@ from stream_player import StreamPlayerWindow
 
 # ------------------------------------------------------------------ constants
 APP_NAME = "CameraScanner"
-APP_VERSION = "1.8.0"
+APP_VERSION = "1.9.0"
 APP_AUTHOR = "Andrew Genben"
 APP_COPYRIGHT = f"© 2025–2026 {APP_AUTHOR}. Все права защищены."
 APP_DESCRIPTION = (
@@ -50,6 +51,36 @@ APP_LICENSE = "Распространяется по лицензии MIT."
 
 # Описание способов сканирования.
 # Каждый элемент: (заголовок, краткая метка режима, текст).
+class _ScanProgress:
+    """Взвешенный прогресс по этапам сканирования."""
+
+    def __init__(self, setter):
+        self._setter = setter
+        self._stages: list[tuple[str, float]] = []
+
+    def add(self, name: str, weight: float) -> None:
+        self._stages.append((name, float(weight)))
+
+    def set(self, name: str, part: float = 1.0) -> None:
+        total = sum(w for _, w in self._stages)
+        if total <= 0:
+            return
+        base = 0.0
+        weight = 0.0
+        for stage, w in self._stages:
+            if stage == name:
+                weight = w
+                break
+            base += w
+        if weight <= 0:
+            return
+        frac = (base + weight * max(0.0, min(1.0, part))) / total
+        self._setter(min(1.0, max(0.0, frac)))
+
+    def finish(self) -> None:
+        self._setter(1.0)
+
+
 SCAN_METHODS = [
     (
         "SNMP (v1 / v2c / v3)",
@@ -212,6 +243,8 @@ class CameraScannerApp:
         self.stop_event = threading.Event()
         self._scan_thread: threading.Thread | None = None
         self._restore = restore or {}
+        self._progress_queue: queue.Queue = queue.Queue()
+        self.progress_var = tk.DoubleVar(value=0.0)
 
         try:
             sv_ttk.set_theme("dark")
@@ -223,6 +256,7 @@ class CameraScannerApp:
         self._build_menu()
         self._build_ui()
 
+        self.root.after(100, self._poll_progress)
         self.on_auto_toggle()
 
         if self.elevated and self._restore.get("autostart", True):
@@ -319,6 +353,9 @@ class CameraScannerApp:
         style.configure("TScrollbar", background=panel, troughcolor=bg,
                         bordercolor=border, arrowcolor=muted)
         style.configure("TSeparator", background=border)
+        style.configure("Scan.Horizontal.TProgressbar", thickness=4,
+                        troughcolor=border, background=accent,
+                        bordercolor=bg, lightcolor=accent, darkcolor=accent)
 
     # ------------------------------------------------------------- UI build
     def _build_ui(self):
@@ -336,6 +373,15 @@ class CameraScannerApp:
         ttk.Label(brand, text="CAMERASCANNER", style="Title.TLabel").pack(anchor="w")
         ttk.Label(brand, text="NETWORK DISCOVERY // IP CAMERAS",
                   style="Subtitle.TLabel").pack(anchor="w")
+
+        progress_wrap = ttk.Frame(top, style="Panel.TFrame")
+        progress_wrap.pack(side="left", fill="x", expand=True, padx=(20, 20))
+        self.progress_canvas = tk.Canvas(
+            progress_wrap, height=4, bg="#2E3740", highlightthickness=0, bd=0)
+        self.progress_canvas.pack(fill="x", pady=8)
+        self._progress_rect = self.progress_canvas.create_rectangle(
+            0, 0, 0, 4, fill="#E6A100", outline="")
+        self.progress_canvas.bind("<Configure>", lambda _e: self._draw_progress())
 
         controls = ttk.Frame(top, style="Panel.TFrame")
         controls.pack(side="right")
@@ -788,6 +834,7 @@ class CameraScannerApp:
         self.stop_btn.config(state="normal")
         self.tree.delete(*self.tree.get_children())
         self.results.clear()
+        self._set_progress(0.0)
         self.status_var.set("Сканирование…")
         settings = {
             "auto": self.auto_discovery.get(),
@@ -823,6 +870,7 @@ class CameraScannerApp:
         try:
             self._run_scan(settings)
         except Exception as exc:  # noqa: BLE001
+            self._set_progress(1.0)
             self.results.append({
                 "ip": "", "mac": "", "protocol": "Ошибка",
                 "info": f"Сканирование прервано: {exc}",
@@ -858,17 +906,39 @@ class CameraScannerApp:
         for net in subnets:
             all_hosts.extend(str(ip) for ip in net.hosts())
 
+        prog = _ScanProgress(self._set_progress)
+        if settings['snmp'] and not settings['auto'] and subnets:
+            prog.add("SNMP", 25)
+        if settings['arp'] and all_hosts:
+            prog.add("ARP", 15)
+        if settings['portscan'] and all_hosts:
+            prog.add("Port", 15)
+        if settings['onvif']:
+            prog.add("ONVIF", 10)
+        if settings['ssdp']:
+            prog.add("SSDP", 5)
+        if settings['mdns']:
+            prog.add("mDNS", 8)
+        if settings['sadp']:
+            prog.add("SADP", 7)
+        if settings['dahua']:
+            prog.add("Dahua", 7)
+        if settings['isapi']:
+            prog.add("ISAPI", 8)
+
         # SNMP
         if settings['snmp'] and not settings['auto'] and subnets:
             net = subnets[0]
             community = settings['community']
             version = settings['snmp_version']
             self._set_status(f"SNMP: {net}…")
-            for ip in net.hosts():
+            snmp_hosts = list(net.hosts())
+            for idx, ip in enumerate(snmp_hosts):
                 if se.is_set():
                     stopped = True
                     break
                 res = snmp_get(str(ip), version, community=community)
+                prog.set("SNMP", (idx + 1) / max(1, len(snmp_hosts)))
                 if res.get("sysDescr") and "Error" not in res["sysDescr"] \
                         and "Exception" not in res["sysDescr"]:
                     info_parts = []
@@ -886,20 +956,27 @@ class CameraScannerApp:
             stopped = True
         if not stopped and settings['arp'] and all_hosts:
             self._set_status(f"ARP: ping sweep {len(all_hosts)} хостов…")
-            for r in arp_scan(all_hosts, stop_event=se):
+            for r in arp_scan(
+                all_hosts, stop_event=se,
+                progress_cb=lambda done, total: prog.set("ARP", done / max(1, total)),
+            ):
                 all_devices.append({
                     "ip": r["ip"], "mac": r["mac"] or "",
                     "protocol": "ARP",
                     "info": "" if r["mac"] else "alive (no ARP entry)",
                 })
                 found_ips.add(r["ip"])
+            prog.set("ARP", 1.0)
 
         # Port scan
         if not stopped and se.is_set():
             stopped = True
         if not stopped and settings['portscan'] and all_hosts:
             self._set_status(f"Port scan: {len(all_hosts)} хостов…")
-            for r in port_scan(all_hosts, stop_event=se):
+            for r in port_scan(
+                all_hosts, stop_event=se,
+                progress_cb=lambda done, total: prog.set("Port", done / max(1, total)),
+            ):
                 ports_str = ", ".join(f"{p}/{name}" for p, name in r["ports"].items())
                 info = f"Open: {ports_str}"
                 if r.get("vendor_hint"):
@@ -908,12 +985,14 @@ class CameraScannerApp:
                     "ip": r["ip"], "mac": "", "protocol": "Port scan", "info": info,
                 })
                 found_ips.add(r["ip"])
+            prog.set("Port", 1.0)
 
         # ONVIF
         if not stopped and se.is_set():
             stopped = True
         if not stopped and settings['onvif']:
             self._set_status("ONVIF: поиск…")
+            prog.set("ONVIF", 0.05)
             for dev in discover_onvif(
                 timeout=5, broadcast_fallback=True, stop_event=se,
                 username=settings['onvif_user'] or None,
@@ -939,16 +1018,19 @@ class CameraScannerApp:
                     "rtsp_credentials": dev.get("rtsp_credentials", {}),
                 })
                 found_ips.add(dev["ip"])
+            prog.set("ONVIF", 1.0)
 
         # SSDP / UPnP
         if not stopped and se.is_set():
             stopped = True
         if not stopped and settings['ssdp']:
             self._set_status("SSDP/UPnP: поиск…")
+            prog.set("SSDP", 0.05)
             try:
                 for dev in discover_ssdp(timeout=3.0, stop_event=se):
                     all_devices.append(dev)
                     found_ips.add(dev["ip"])
+                prog.set("SSDP", 1.0)
             except Exception as exc:  # noqa: BLE001
                 all_devices.append({"ip": "", "mac": "", "protocol": "SSDP",
                                     "info": f"Ошибка: {exc}"})
@@ -958,10 +1040,12 @@ class CameraScannerApp:
             stopped = True
         if not stopped and settings['mdns']:
             self._set_status("mDNS/Bonjour: поиск…")
+            prog.set("mDNS", 0.05)
             try:
                 for dev in discover_mdns(timeout=4.0, stop_event=se):
                     all_devices.append(dev)
                     found_ips.add(dev["ip"])
+                prog.set("mDNS", 1.0)
             except Exception as exc:  # noqa: BLE001
                 all_devices.append({"ip": "", "mac": "", "protocol": "mDNS",
                                     "info": f"Ошибка: {exc}"})
@@ -971,6 +1055,7 @@ class CameraScannerApp:
             stopped = True
         if not stopped and settings['sadp']:
             self._set_status("SADP: поиск…")
+            prog.set("SADP", 0.05)
             try:
                 for dev in discover_hikvision_sadp(timeout=5.0, broadcast=True, stop_event=se):
                     all_devices.append({
@@ -983,6 +1068,7 @@ class CameraScannerApp:
                                  f"FW: {dev['firmware']}, Activated: {dev['activated']}"),
                     })
                     found_ips.add(dev["ip"])
+                prog.set("SADP", 1.0)
             except Exception as exc:
                 all_devices.append({"ip": "", "mac": "", "protocol": "SADP",
                                     "info": f"Ошибка: {exc}"})
@@ -992,6 +1078,7 @@ class CameraScannerApp:
             stopped = True
         if not stopped and settings['dahua']:
             self._set_status("Dahua: поиск…")
+            prog.set("Dahua", 0.05)
             try:
                 for dev in discover_dahua(timeout=5.0, stop_event=se):
                     all_devices.append({
@@ -1004,6 +1091,7 @@ class CameraScannerApp:
                                  f"FW: {dev['firmware']}, Activated: {dev['activated']}"),
                     })
                     found_ips.add(dev["ip"])
+                prog.set("Dahua", 1.0)
             except Exception as exc:
                 all_devices.append({"ip": "", "mac": "", "protocol": "Dahua",
                                     "info": f"Ошибка: {exc}"})
@@ -1021,11 +1109,12 @@ class CameraScannerApp:
                 all_devices.append({"ip": "", "mac": "", "protocol": "ISAPI",
                                     "info": "Нет хостов для проверки (укажите подсеть)"})
             self._set_status(f"ISAPI: проба {len(isapi_targets)} хостов…")
-            for ip in isapi_targets:
+            for idx, ip in enumerate(isapi_targets):
                 if se.is_set():
                     stopped = True
                     break
                 r = isapi_probe(ip, timeout=2.0)
+                prog.set("ISAPI", (idx + 1) / max(1, len(isapi_targets)))
                 if not r:
                     continue
                 parts = []
@@ -1045,6 +1134,7 @@ class CameraScannerApp:
 
         if se.is_set():
             stopped = True
+        prog.finish()
         if settings.get("online_oui"):
             self._set_status("OUI: запрос онлайн-справочника…")
         self.results = merge_devices(all_devices, online=settings.get("online_oui", False))
@@ -1052,6 +1142,32 @@ class CameraScannerApp:
 
     def _set_status(self, text: str):
         self.root.after(0, lambda: self.status_var.set(text))
+
+    def _set_progress(self, value: float):
+        self._progress_queue.put(max(0.0, min(1.0, value)))
+
+    def _poll_progress(self):
+        try:
+            while True:
+                self.progress_var.set(self._progress_queue.get_nowait())
+        except queue.Empty:
+            pass
+        except tk.TclError:
+            return
+        self._draw_progress()
+        try:
+            self.root.after(100, self._poll_progress)
+        except tk.TclError:
+            pass
+
+    def _draw_progress(self):
+        try:
+            width = self.progress_canvas.winfo_width()
+            value = max(0.0, min(1.0, float(self.progress_var.get())))
+            self.progress_canvas.coords(
+                self._progress_rect, 0, 0, int(width * value), 4)
+        except tk.TclError:
+            pass
 
     def show_device_details(self, event=None):
         sel = self.tree.selection()
