@@ -5,7 +5,7 @@
 [![Python](https://img.shields.io/badge/Python-3.12%2B-blue?logo=python&logoColor=white)](https://www.python.org/)
 [![Platform](https://img.shields.io/badge/Platform-Windows%2010%2F11-0078D6?logo=windows&logoColor=white)]()
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-1.3.1-blue)]()
+[![Version](https://img.shields.io/badge/Version-1.4.0-blue)]()
 
 **CameraScanner** — настольное приложение для быстрого поиска IP-камер и сетевых видеорегистраторов в локальной сети. Поддерживает семь независимых протоколов обнаружения — от быстрых broadcast/multicast до активного перебора адресов и портов, что позволяет находить камеры, у которых отключены штатные службы обнаружения.
 
@@ -20,6 +20,8 @@
 | **ONVIF WS-Discovery** | SOAP `Probe` на multicast `239.255.255.250:3702` + broadcast-фоллбэк | Все ONVIF-совместимые камеры и NVR |
 | **SADP (Hikvision)** | UDP multicast `239.255.255.250/.230:37020` + broadcast | Hikvision: MAC, серийник, модель, прошивка, статус активации |
 | **Dahua / Amcrest** | UDP broadcast `:37810`, JSON | Dahua/Amcrest, включая устройства с отключённым ONVIF |
+| **SSDP / UPnP** | M-SEARCH на `239.255.255.250:1900` | Веб-интерфейсы камер, NVR и медиаустройства |
+| **mDNS / Bonjour** | `_onvif._tcp`, `_rtsp._tcp`, `_axis-video._tcp` | ONVIF-камеры, Axis, RTSP-устройства |
 
 ### Active scanning — перебор адресов, работает в пределах подсети
 

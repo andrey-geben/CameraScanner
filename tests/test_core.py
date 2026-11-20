@@ -42,6 +42,28 @@ class CameraScannerTests(unittest.TestCase):
         self.assertTrue(args["auto"])
         self.assertFalse(args["snmp"])
 
+
+    def test_merge_devices(self):
+        from device_merge import merge_devices
+        merged = merge_devices([
+            {"ip": "10.0.0.5", "mac": "aa:bb", "protocol": "SADP",
+             "model": "DS-2CD", "vendor": "Hikvision"},
+            {"ip": "10.0.0.5", "protocol": "ONVIF", "serial": "SN1"},
+            {"ip": "10.0.0.5", "protocol": "Port scan", "info": "Open: 80/http"},
+        ])
+        self.assertEqual(len(merged), 1)
+        dev = merged[0]
+        self.assertEqual(dev["mac"], "aa:bb")
+        self.assertIn("SADP", dev["protocol"])
+        self.assertIn("ONVIF", dev["protocol"])
+        self.assertEqual(dev["device"], "Hikvision / DS-2CD")
+
+    def test_ssdp_headers(self):
+        from ssdp_scanner import _parse_headers
+        h = _parse_headers(b"HTTP/1.1 200 OK\r\nST: upnp:rootdevice\r\nSERVER: Linux/1.0 UPnP/1.1\r\n\r\n")
+        self.assertEqual(h["st"], "upnp:rootdevice")
+        self.assertIn("server", h)
+
     def test_ico_exists(self):
         ok, info = main.validate_ico(main.resource_path("assets/app.ico"))
         self.assertTrue(ok, info)

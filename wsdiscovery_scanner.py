@@ -10,6 +10,7 @@ from wsdiscovery.discovery import ThreadedWSDiscovery as WSDiscovery
 from wsdiscovery import QName
 
 from net_utils import get_broadcast_addresses
+from onvif_client import enrich as onvif_enrich
 
 WSD_MULTICAST = "239.255.255.250"
 WSD_PORT = 3702
@@ -103,7 +104,10 @@ def _broadcast_probe(timeout: float, stop_event: threading.Event | None = None) 
 
 def discover_onvif(timeout: float = 5,
                    broadcast_fallback: bool = True,
-                   stop_event: threading.Event | None = None) -> list[dict]:
+                   stop_event: threading.Event | None = None,
+                   username: str | None = None,
+                   password: str | None = None,
+                   enrich_info: bool = True) -> list[dict]:
     found: dict[str, dict] = {}
 
     try:
@@ -119,4 +123,20 @@ def discover_onvif(timeout: float = 5,
         except Exception as exc:
             print(f"WS-Discovery broadcast failed: {exc}")
 
+    if enrich_info:
+        for idx, dev in enumerate(found.values()):
+            if idx >= 16:
+                break
+            xaddrs = dev.get("xaddrs") or []
+            if not xaddrs:
+                continue
+            try:
+                extra = onvif_enrich(
+                    xaddrs[0], username or None, password or None, timeout=1.2,
+                )
+            except Exception:
+                continue
+            for key, val in extra.items():
+                if val and not dev.get(key):
+                    dev[key] = val
     return list(found.values())

@@ -7,6 +7,7 @@ import subprocess
 import sys
 import threading
 import tkinter as tk
+import webbrowser
 from tkinter import ttk, messagebox, filedialog
 
 import sv_ttk
@@ -27,11 +28,14 @@ from port_scanner import port_scan
 from isapi_scanner import isapi_probe
 from net_utils import get_local_subnets
 from exporter import export_to_csv
+from device_merge import merge_devices
+from ssdp_scanner import discover_ssdp
+from mdns_scanner import discover_mdns
 
 
 # ------------------------------------------------------------------ constants
 APP_NAME = "CameraScanner"
-APP_VERSION = "1.3.1"
+APP_VERSION = "1.4.0"
 APP_AUTHOR = "Andrew Genben"
 APP_COPYRIGHT = f"© 2025–2026 {APP_AUTHOR}. Все права защищены."
 APP_DESCRIPTION = (
@@ -288,6 +292,20 @@ class CameraScannerApp:
 
         snmp_frame.columnconfigure(1, weight=1)
 
+        # ---- ONVIF (необязательно) ----
+        onvif_frame = ttk.LabelFrame(left, text=" ONVIF (необязательно) ", padding=(12, 8))
+        onvif_frame.pack(fill="x", pady=(0, 8))
+        ttk.Label(onvif_frame, text="Логин:").grid(row=0, column=0, sticky="w", pady=2)
+        self.onvif_user = ttk.Entry(onvif_frame, width=18)
+        self.onvif_user.grid(row=0, column=1, sticky="ew", padx=(8, 0), pady=2)
+        ttk.Label(onvif_frame, text="Пароль:").grid(row=1, column=0, sticky="w", pady=2)
+        self.onvif_password = ttk.Entry(onvif_frame, width=18, show="*")
+        self.onvif_password.grid(row=1, column=1, sticky="ew", padx=(8, 0), pady=2)
+        ttk.Label(onvif_frame, text="для DeviceInfo / RTSP-потока; можно оставить пустым",
+                  style="Hint.TLabel", justify="left").grid(
+            row=2, column=0, columnspan=2, sticky="w", pady=(2, 0))
+        onvif_frame.columnconfigure(1, weight=1)
+
         # ---- Режим ----
         mode_frame = ttk.LabelFrame(left, text=" Режим ", padding=(12, 8))
         mode_frame.pack(fill="x", pady=(0, 8))
@@ -316,6 +334,8 @@ class CameraScannerApp:
         self.use_arp      = tk.BooleanVar(value=r.get("arp", False))
         self.use_portscan = tk.BooleanVar(value=r.get("portscan", False))
         self.use_isapi    = tk.BooleanVar(value=r.get("isapi", False))
+        self.use_ssdp     = tk.BooleanVar(value=r.get("ssdp", True))
+        self.use_mdns     = tk.BooleanVar(value=r.get("mdns", True))
 
         self.snmp_cb = ttk.Checkbutton(proto, text="SNMP (MIB-II + vendor OID)",
                                        variable=self.use_snmp)
@@ -334,6 +354,12 @@ class CameraScannerApp:
 
         ttk.Checkbutton(proto, text="Dahua / Amcrest",
                         variable=self.use_dahua).pack(anchor="w", pady=3)
+
+        ttk.Checkbutton(proto, text="SSDP / UPnP",
+                        variable=self.use_ssdp).pack(anchor="w", pady=3)
+
+        ttk.Checkbutton(proto, text="mDNS / Bonjour",
+                        variable=self.use_mdns).pack(anchor="w", pady=3)
 
         ttk.Checkbutton(proto, text="ARP (ping sweep)",
                         variable=self.use_arp).pack(anchor="w", pady=3)
@@ -365,17 +391,20 @@ class CameraScannerApp:
         tree_frame = ttk.LabelFrame(right, text=" Результаты ", padding=(6, 4))
         tree_frame.pack(fill="both", expand=True)
 
-        columns = ("ip", "mac", "protocol", "info")
+        columns = ("ip", "mac", "device", "protocol", "info")
         self.tree = ttk.Treeview(tree_frame, columns=columns, show="headings")
 
         self.tree.heading("ip", text="IP-адрес")
         self.tree.heading("mac", text="MAC")
-        self.tree.heading("protocol", text="Протокол")
+        self.tree.heading("device", text="Устройство")
+        self.tree.heading("protocol", text="Протоколы")
         self.tree.heading("info", text="Информация")
-        self.tree.column("ip",       width=130, minwidth=110, stretch=False, anchor="w")
-        self.tree.column("mac",      width=150, minwidth=130, stretch=False, anchor="w")
-        self.tree.column("protocol", width=110, minwidth=100, stretch=False, anchor="w")
-        self.tree.column("info",     width=600, minwidth=200, stretch=True,  anchor="w")
+        self.tree.column("ip",       width=120, minwidth=100, stretch=False, anchor="w")
+        self.tree.column("mac",      width=135, minwidth=120, stretch=False, anchor="w")
+        self.tree.column("device",   width=190, minwidth=120, stretch=False, anchor="w")
+        self.tree.column("protocol", width=150, minwidth=110, stretch=False, anchor="w")
+        self.tree.column("info",     width=520, minwidth=200, stretch=True,  anchor="w")
+        self.tree.bind("<Double-1>", self.show_device_details)
 
         vsb = ttk.Scrollbar(tree_frame, orient="vertical", command=self.tree.yview)
         hsb = ttk.Scrollbar(tree_frame, orient="horizontal", command=self.tree.xview)
@@ -670,6 +699,8 @@ class CameraScannerApp:
             self.snmp_cb.config(state="disabled")
             self.use_arp.set(True)
             self.use_portscan.set(True)
+            self.use_ssdp.set(True)
+            self.use_mdns.set(True)
         else:
             self.subnet_entry.config(state="normal")
             self.community_entry.config(state="normal")
@@ -738,6 +769,10 @@ class CameraScannerApp:
             "arp": self.use_arp.get(),
             "portscan": self.use_portscan.get(),
             "isapi": self.use_isapi.get(),
+            "ssdp": self.use_ssdp.get(),
+            "mdns": self.use_mdns.get(),
+            "onvif_user": self.onvif_user.get().strip(),
+            "onvif_password": self.onvif_password.get(),
         }
         self._scan_thread = threading.Thread(
             target=self.run_scan, args=(settings,), daemon=True)
@@ -846,12 +881,56 @@ class CameraScannerApp:
             stopped = True
         if not stopped and settings['onvif']:
             self._set_status("ONVIF: поиск…")
-            for dev in discover_onvif(timeout=5, broadcast_fallback=True, stop_event=se):
+            for dev in discover_onvif(
+                timeout=5, broadcast_fallback=True, stop_event=se,
+                username=settings['onvif_user'] or None,
+                password=settings['onvif_password'] or None,
+            ):
+                bits = [f"XAddrs: {dev.get('xaddrs', [])}"]
+                if dev.get("manufacturer"):
+                    bits.append(f"Vendor: {dev['manufacturer']}")
+                if dev.get("model"):
+                    bits.append(f"Model: {dev['model']}")
+                if dev.get("firmware"):
+                    bits.append(f"FW: {dev['firmware']}")
+                if dev.get("serial"):
+                    bits.append(f"SN: {dev['serial']}")
                 all_devices.append({
                     "ip": dev["ip"], "mac": "", "protocol": "ONVIF",
-                    "info": f"XAddrs: {dev.get('xaddrs', [])}",
+                    "info": " | ".join(bits),
+                    "vendor": dev.get("manufacturer", ""),
+                    "model": dev.get("model", ""),
+                    "firmware": dev.get("firmware", ""),
+                    "serial": dev.get("serial", ""),
+                    "rtsp_urls": dev.get("rtsp_urls", []),
                 })
                 found_ips.add(dev["ip"])
+
+        # SSDP / UPnP
+        if not stopped and se.is_set():
+            stopped = True
+        if not stopped and settings['ssdp']:
+            self._set_status("SSDP/UPnP: поиск…")
+            try:
+                for dev in discover_ssdp(timeout=3.0, stop_event=se):
+                    all_devices.append(dev)
+                    found_ips.add(dev["ip"])
+            except Exception as exc:  # noqa: BLE001
+                all_devices.append({"ip": "", "mac": "", "protocol": "SSDP",
+                                    "info": f"Ошибка: {exc}"})
+
+        # mDNS / Bonjour
+        if not stopped and se.is_set():
+            stopped = True
+        if not stopped and settings['mdns']:
+            self._set_status("mDNS/Bonjour: поиск…")
+            try:
+                for dev in discover_mdns(timeout=4.0, stop_event=se):
+                    all_devices.append(dev)
+                    found_ips.add(dev["ip"])
+            except Exception as exc:  # noqa: BLE001
+                all_devices.append({"ip": "", "mac": "", "protocol": "mDNS",
+                                    "info": f"Ошибка: {exc}"})
 
         # SADP
         if not stopped and se.is_set():
@@ -866,7 +945,10 @@ class CameraScannerApp:
                     for dev in discover_hikvision_sadp(timeout=5.0, broadcast=True, stop_event=se):
                         all_devices.append({
                             "ip": dev["ip"], "mac": dev.get("mac", ""),
-                            "protocol": "SADP",
+                            "protocol": "SADP", "vendor": "Hikvision",
+                            "model": dev.get("model", ""),
+                            "firmware": dev.get("firmware", ""),
+                            "serial": dev.get("serial", ""),
                             "info": (f"SN: {dev['serial']}, Model: {dev['model']}, "
                                      f"FW: {dev['firmware']}, Activated: {dev['activated']}"),
                         })
@@ -884,7 +966,10 @@ class CameraScannerApp:
                 for dev in discover_dahua(timeout=5.0, stop_event=se):
                     all_devices.append({
                         "ip": dev["ip"], "mac": dev.get("mac", ""),
-                        "protocol": "Dahua",
+                        "protocol": "Dahua", "vendor": "Dahua",
+                        "model": dev.get("model", ""),
+                        "firmware": dev.get("firmware", ""),
+                        "serial": dev.get("serial", ""),
                         "info": (f"SN: {dev['serial']}, Model: {dev['model']}, "
                                  f"FW: {dev['firmware']}, Activated: {dev['activated']}"),
                     })
@@ -930,34 +1015,84 @@ class CameraScannerApp:
 
         if se.is_set():
             stopped = True
-        self.results = all_devices
+        self.results = merge_devices(all_devices)
         self.root.after(0, lambda: self.update_treeview(stopped))
 
     def _set_status(self, text: str):
         self.root.after(0, lambda: self.status_var.set(text))
 
+    def show_device_details(self, event=None):
+        sel = self.tree.selection()
+        if not sel:
+            return
+        values = self.tree.item(sel[0], "values")
+        ip = values[0] if values else ""
+        dev = next((d for d in self.results if d.get("ip") == ip), None)
+        if not dev:
+            return
+
+        win = tk.Toplevel(self.root)
+        win.title(f"Устройство {ip or '—'}")
+        win.transient(self.root)
+        win.geometry("620x420")
+        text = tk.Text(win, wrap="word", padx=12, pady=12)
+        text.pack(fill="both", expand=True)
+        lines = [
+            f"IP: {dev.get('ip', '—')}",
+            f"MAC: {dev.get('mac') or '—'}",
+            f"Устройство: {dev.get('device') or '—'}",
+            f"Протоколы: {dev.get('protocol') or '—'}",
+            f"Вендор: {dev.get('vendor') or '—'}",
+            f"Модель: {dev.get('model') or '—'}",
+            f"Прошивка: {dev.get('firmware') or '—'}",
+            f"Серийник: {dev.get('serial') or '—'}",
+            f"Веб: {dev.get('web_url') or '—'}",
+            "",
+            "RTSP-потоки:",
+        ]
+        urls = dev.get("rtsp_urls") or []
+        lines += [f"  {u}" for u in urls] if urls else ["  —"]
+        lines += ["", "Доказательства:", dev.get("info") or "—"]
+        text.insert("1.0", "\n".join(lines))
+        text.config(state="disabled")
+
+        bar = ttk.Frame(win, padding=(12, 0, 12, 12))
+        bar.pack(fill="x")
+        if ip:
+            ttk.Button(bar, text="Копировать IP", command=lambda: self._copy(ip)).pack(side="left")
+        if urls:
+            ttk.Button(bar, text="Копировать RTSP",
+                       command=lambda: self._copy(urls[0])).pack(side="left", padx=6)
+        if dev.get("web_url"):
+            ttk.Button(bar, text="Открыть веб",
+                       command=lambda: webbrowser.open(dev["web_url"])).pack(side="left")
+        ttk.Button(bar, text="Закрыть", command=win.destroy).pack(side="right")
+
+    def _copy(self, value: str):
+        self.root.clipboard_clear()
+        self.root.clipboard_append(value)
+
     def update_treeview(self, stopped: bool = False):
         self.tree.delete(*self.tree.get_children())
-        seen: set[tuple] = set()
         for dev in self.results:
-            key = (dev.get("ip", ""), dev.get("mac", ""),
-                   dev.get("protocol", ""), dev.get("info", ""))
-            if key in seen:
-                continue
-            seen.add(key)
-            self.tree.insert("", "end", values=(
+            values = (
                 dev.get("ip", ""), dev.get("mac", ""),
-                dev.get("protocol", ""), dev.get("info", ""),
-            ))
+                dev.get("device", ""), dev.get("protocol", ""),
+                dev.get("info", ""),
+            )
+            if dev.get("ip"):
+                self.tree.insert("", "end", iid=dev["ip"], values=values)
+            else:
+                self.tree.insert("", "end", values=values)
         self.scan_btn.config(state="normal")
         self.stop_btn.config(state="disabled")
         unique_ips = {dev.get("ip") for dev in self.results if dev.get("ip")}
         if stopped:
             self.status_var.set(
-                f"Остановлено. Уникальных IP: {len(unique_ips)}; записей: {len(seen)}")
+                f"Остановлено. Уникальных IP: {len(unique_ips)}; записей: {len(self.results)}")
         else:
             self.status_var.set(
-                f"Найдено. Уникальных IP: {len(unique_ips)}; записей: {len(seen)}")
+                f"Найдено. Уникальных IP: {len(unique_ips)}; записей: {len(self.results)}")
 
     # -------------------------------------------------------------- Export
     def export_csv(self):
@@ -968,7 +1103,13 @@ class CameraScannerApp:
             defaultextension=".csv", filetypes=[("CSV files", "*.csv")],
         )
         if filename:
-            export_to_csv(self.results, filename)
+            rows = []
+            for dev in self.results:
+                rows.append({
+                    k: (", ".join(v) if isinstance(v, list) else v)
+                    for k, v in dev.items()
+                })
+            export_to_csv(rows, filename)
             messagebox.showinfo("Экспорт", f"Данные сохранены в {filename}")
 
 

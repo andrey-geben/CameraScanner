@@ -11,8 +11,9 @@ pysnmp==7.1.17
 pyasn1==0.6.1
 pycryptodomex==3.20.0
 
-# ONVIF WS-Discovery
+# ONVIF WS-Discovery + mDNS
 wsdiscovery==2.0.0
+zeroconf==0.149.17
 
 # Сборка exe
 pyinstaller==6.11.1

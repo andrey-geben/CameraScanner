@@ -36,6 +36,8 @@ hiddenimports += collect_submodules("Cryptodome")
 hiddenimports += ["wsdiscovery", "netifaces"]
 # --- Тема sv-ttk ---
 hiddenimports += ["sv_ttk", "darkdetect", "pywinstyles"]
+# mDNS
+hiddenimports += collect_submodules("zeroconf")
 
 # ----------------------------------------------------------------------- datas
 datas = [
