@@ -37,7 +37,7 @@ from stream_player import StreamPlayerWindow
 
 # ------------------------------------------------------------------ constants
 APP_NAME = "CameraScanner"
-APP_VERSION = "1.6.0"
+APP_VERSION = "1.6.1"
 APP_AUTHOR = "Andrew Genben"
 APP_COPYRIGHT = f"© 2025–2026 {APP_AUTHOR}. Все права защищены."
 APP_DESCRIPTION = (
@@ -452,21 +452,19 @@ class CameraScannerApp:
         if self.elevated or is_admin():
             self.use_sadp.set(True)
 
-        # ---------------------------- ЦЕНТР + КАРТОЧКА ----------------------------
-        pane = ttk.Panedwindow(content, orient="horizontal")
-        pane.pack(fill="both", expand=True)
-
-        table_card = ttk.Frame(pane, style="Card.TFrame", padding=6)
-        pane.add(table_card, weight=1)
-        detail_card = ttk.Frame(pane, style="Card.TFrame", padding=10, width=340)
-        pane.add(detail_card, weight=0)
+        # ---------------------------- ЦЕНТР: ТАБЛИЦА ----------------------------
+        table_card = ttk.Frame(content, style="Card.TFrame", padding=6)
+        table_card.pack(fill="both", expand=True)
 
         table_head = ttk.Frame(table_card, style="Card.TFrame")
         table_head.pack(fill="x", pady=(0, 4))
         ttk.Label(table_head, text="УСТРОЙСТВА", style="Section.TLabel").pack(side="left")
         self.count_label = tk.StringVar(value="0")
+        self.info_btn = ttk.Button(table_head, text="Информация",
+                                   command=self.show_device_details, state="disabled")
+        self.info_btn.pack(side="right", padx=(8, 0))
         ttk.Label(table_head, textvariable=self.count_label,
-                  style="Muted.TLabel").pack(side="right")
+                  style="Muted.TLabel").pack(side="right", padx=(0, 8))
 
         table_body = ttk.Frame(table_card, style="Card.TFrame")
         table_body.pack(fill="both", expand=True)
@@ -477,11 +475,12 @@ class CameraScannerApp:
         self.tree.heading("mac", text="MAC")
         self.tree.heading("device", text="Устройство")
         self.tree.heading("protocol", text="Протоколы")
-        self.tree.column("ip", width=100, minwidth=90, stretch=False, anchor="w")
-        self.tree.column("mac", width=130, minwidth=110, stretch=False, anchor="w")
-        self.tree.column("device", width=180, minwidth=130, stretch=True, anchor="w")
-        self.tree.column("protocol", width=130, minwidth=100, stretch=False, anchor="w")
+        self.tree.column("ip", width=120, minwidth=100, stretch=False, anchor="w")
+        self.tree.column("mac", width=150, minwidth=120, stretch=False, anchor="w")
+        self.tree.column("device", width=280, minwidth=160, stretch=True, anchor="w")
+        self.tree.column("protocol", width=180, minwidth=120, stretch=False, anchor="w")
         self.tree.bind("<<TreeviewSelect>>", self._on_tree_select)
+        self.tree.bind("<Double-1>", self.show_device_details)
 
         vsb = ttk.Scrollbar(table_body, orient="vertical", command=self.tree.yview)
         self.tree.configure(yscrollcommand=vsb.set)
@@ -489,28 +488,6 @@ class CameraScannerApp:
         vsb.grid(row=0, column=1, sticky="ns")
         table_body.rowconfigure(0, weight=1)
         table_body.columnconfigure(0, weight=1)
-
-        ttk.Label(detail_card, text="КАРТОЧКА УСТРОЙСТВА",
-                  style="Section.TLabel").pack(anchor="w", pady=(0, 6))
-        self.detail_text = tk.Text(
-            detail_card, wrap="word", relief="flat", height=18, width=34,
-            background="#20262E", foreground="#E6EDF3",
-            insertbackground="#E6EDF3", font=("Segoe UI", 9),
-            padx=8, pady=8, borderwidth=0)
-        self.detail_text.pack(fill="both", expand=True)
-        self.detail_text.insert("1.0", "Выберите устройство в таблице.")
-        self.detail_text.config(state="disabled")
-        self.detail_buttons = ttk.Frame(detail_card, style="Card.TFrame")
-        self.detail_buttons.pack(fill="x", pady=(8, 0))
-
-        def _place_sash():
-            try:
-                total = pane.winfo_width()
-                if total > 600:
-                    pane.sashpos(0, max(420, total - 340))
-            except tk.TclError:
-                pass
-        self.root.after(200, _place_sash)
 
     # --------------------------------------------------------------- меню
     def _build_menu(self):
@@ -1210,76 +1187,10 @@ class CameraScannerApp:
         self.root.clipboard_clear()
         self.root.clipboard_append(value)
 
-    def _clear_details(self):
-        self.detail_text.config(state="normal")
-        self.detail_text.delete("1.0", "end")
-        self.detail_text.insert("1.0", "Выберите устройство в таблице.")
-        self.detail_text.config(state="disabled")
-        for child in self.detail_buttons.winfo_children():
-            child.destroy()
-
     def _on_tree_select(self, event=None):
         sel = self.tree.selection()
-        if not sel:
-            self._clear_details()
-            return
-        values = self.tree.item(sel[0], "values")
-        ip = values[0] if values else ""
-        dev = next((d for d in self.results if d.get("ip") == ip), None)
-        if dev:
-            self._render_details(dev)
-        else:
-            self._clear_details()
-
-    def _render_details(self, dev: dict):
-        for child in self.detail_buttons.winfo_children():
-            child.destroy()
-
-        urls = dev.get("rtsp_urls") or []
-        creds = dev.get("rtsp_credentials") or {}
-        lines = [
-            f"IP        {dev.get('ip') or '—'}",
-            f"MAC       {dev.get('mac') or '—'}",
-            f"Устройство {dev.get('device') or '—'}",
-            f"Протоколы  {dev.get('protocol') or '—'}",
-            f"Вендор     {dev.get('vendor') or '—'}",
-            f"Модель     {dev.get('model') or '—'}",
-            f"Прошивка   {dev.get('firmware') or '—'}",
-            f"Серийник   {dev.get('serial') or '—'}",
-            f"Веб        {dev.get('web_url') or '—'}",
-            "",
-            "RTSP:",
-        ]
-        lines += [f"  {u}" for u in urls] if urls else ["  —"]
-        if creds.get("user"):
-            lines += ["", "Учётные данные (из ONVIF/ручного ввода):",
-                      f"  Пользователь: {creds.get('user')}",
-                      "  Пароль: ••••••••"]
-        lines += ["", "Доказательства:", dev.get("info") or "—"]
-
-        self.detail_text.config(state="normal")
-        self.detail_text.delete("1.0", "end")
-        self.detail_text.insert("1.0", "\n".join(lines))
-        self.detail_text.config(state="disabled")
-
-        def add(text, command, style="TButton"):
-            b = ttk.Button(self.detail_buttons, text=text, command=command, style=style)
-            b.pack(fill="x", pady=2)
-            return b
-
-        if urls:
-            add("▶  Смотреть поток", lambda: self._open_stream(urls, creds, dev),
-                style="Accent.TButton")
-        add("Копировать IP", lambda: self._copy(dev.get("ip", "")))
-        if urls:
-            add("Копировать RTSP", lambda: self._copy(urls[0]))
-        if creds.get("user"):
-            add("Показать пароль", lambda: self._show_password(creds))
-            if urls:
-                add("Копировать RTSP с паролем",
-                    lambda: self._copy_rtsp_with_password(urls, creds))
-        if dev.get("web_url"):
-            add("Открыть веб", lambda: webbrowser.open(dev["web_url"]))
+        if getattr(self, "info_btn", None) is not None:
+            self.info_btn.config(state="normal" if sel else "disabled")
 
     def update_treeview(self, stopped: bool = False):
         self.tree.delete(*self.tree.get_children())
@@ -1298,9 +1209,7 @@ class CameraScannerApp:
         rows = self.tree.get_children()
         if rows:
             self.tree.selection_set(rows[0])
-            self._on_tree_select()
-        else:
-            self._clear_details()
+        self._on_tree_select()
         unique_ips = {dev.get("ip") for dev in self.results if dev.get("ip")}
         if stopped:
             self.status_var.set(
