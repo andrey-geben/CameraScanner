@@ -191,6 +191,9 @@ def enrich(xaddr: str, user: str | None = None, password: str | None = None,
         if uri:
             raw_uris.append(uri)
     creds = extract_rtsp_credentials(raw_uris)
+    if not creds and user and password and raw_uris:
+        creds = {"user": user, "password": password,
+                 "source": "ONVIF-авторизация (введена вручную)"}
     return {
         **info,
         "rtsp_urls": [redact_rtsp_url(u) for u in raw_uris],

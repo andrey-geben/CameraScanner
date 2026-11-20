@@ -36,7 +36,7 @@ from mdns_scanner import discover_mdns
 
 # ------------------------------------------------------------------ constants
 APP_NAME = "CameraScanner"
-APP_VERSION = "1.4.2"
+APP_VERSION = "1.4.3"
 APP_AUTHOR = "Andrew Genben"
 APP_COPYRIGHT = f"© 2025–2026 {APP_AUTHOR}. Все права защищены."
 APP_DESCRIPTION = (
@@ -1060,10 +1060,22 @@ class CameraScannerApp:
             return
         url = urls[0]
         pwd = creds.get("password", "")
+        user = creds.get("user", "")
         if pwd:
             quoted = urllib.parse.quote(pwd, safe="")
-            url = url.replace("password=***", f"password={quoted}")
-            url = url.replace(":***@", f":{quoted}@")
+            if "password=***" in url:
+                url = url.replace("password=***", f"password={quoted}")
+            elif ":***@" in url:
+                url = url.replace(":***@", f":{quoted}@")
+            else:
+                # HiWatch не кладёт креды в URL — добавляем userinfo сами
+                parts = urllib.parse.urlsplit(url)
+                if parts.hostname:
+                    auth = f"{urllib.parse.quote(user, safe='')}:{quoted}@"
+                    host = parts.hostname + (f":{parts.port}" if parts.port else "")
+                    url = urllib.parse.urlunsplit(
+                        (parts.scheme, auth + host, parts.path, parts.query, parts.fragment)
+                    )
         self._copy(url)
         messagebox.showinfo("RTSP", "Ссылка с паролем скопирована в буфер обмена.")
 
