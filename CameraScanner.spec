@@ -7,7 +7,7 @@ PyInstaller spec для CameraScanner (с темой sv-ttk).
 """
 
 import os
-from PyInstaller.utils.hooks import collect_submodules, collect_data_files
+from PyInstaller.utils.hooks import collect_submodules, collect_data_files, collect_dynamic_libs
 
 # ---------------------------------------------------------------- пути к ресурсам
 ICON_PATH = os.path.join(SPECPATH, "assets", "app.ico")
@@ -38,6 +38,8 @@ hiddenimports += ["wsdiscovery", "netifaces"]
 hiddenimports += ["sv_ttk", "darkdetect", "pywinstyles"]
 # mDNS
 hiddenimports += collect_submodules("zeroconf")
+# Встроенный RTSP-плеер
+hiddenimports += ["av", "av.video", "PIL.ImageTk", "PIL.Image"]
 
 # ----------------------------------------------------------------------- datas
 datas = [
@@ -50,7 +52,7 @@ datas += collect_data_files("sv_ttk")
 a = Analysis(
     ["main.py"],
     pathex=[SPECPATH],
-    binaries=[],
+    binaries=collect_dynamic_libs("av"),
     datas=datas,
     hiddenimports=hiddenimports,
     hookspath=[],

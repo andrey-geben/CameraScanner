@@ -17,3 +17,7 @@ zeroconf==0.149.17
 
 # Сборка exe
 pyinstaller==6.11.1
+
+# Встроенный просмотр RTSP
+av==13.1.0
+Pillow==10.4.0

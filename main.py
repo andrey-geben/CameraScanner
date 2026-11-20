@@ -32,11 +32,12 @@ from exporter import export_to_csv
 from device_merge import merge_devices
 from ssdp_scanner import discover_ssdp
 from mdns_scanner import discover_mdns
+from stream_player import StreamPlayerWindow
 
 
 # ------------------------------------------------------------------ constants
 APP_NAME = "CameraScanner"
-APP_VERSION = "1.4.4"
+APP_VERSION = "1.5.0"
 APP_AUTHOR = "Andrew Genben"
 APP_COPYRIGHT = f"© 2025–2026 {APP_AUTHOR}. Все права защищены."
 APP_DESCRIPTION = (
@@ -1045,6 +1046,9 @@ class CameraScannerApp:
         if urls:
             ttk.Button(first, text="Копировать RTSP",
                        command=lambda: self._copy(urls[0])).pack(side="left", padx=6)
+            ttk.Button(first, text="▶ Смотреть поток",
+                       command=lambda: self._open_stream(urls, creds, dev)).pack(
+                           side="left", padx=6)
         if dev.get("web_url"):
             ttk.Button(first, text="Открыть веб",
                        command=lambda: webbrowser.open(dev["web_url"])).pack(side="left")
@@ -1063,10 +1067,9 @@ class CameraScannerApp:
                     command=lambda: self._copy_rtsp_with_password(urls, creds),
                 ).pack(side="left", padx=6)
 
-    def _copy_rtsp_with_password(self, urls: list[str], creds: dict):
-        """Копирует рабочий RTSP-URL, подставляя пароль из ONVIF-ответа."""
+    def _rtsp_with_credentials(self, urls: list[str], creds: dict) -> str:
         if not urls:
-            return
+            return ""
         url = urls[0]
         pwd = creds.get("password", "")
         user = creds.get("user", "")
@@ -1077,7 +1080,6 @@ class CameraScannerApp:
             elif ":***@" in url:
                 url = url.replace(":***@", f":{quoted}@")
             else:
-                # HiWatch не кладёт креды в URL — добавляем userinfo сами
                 parts = urllib.parse.urlsplit(url)
                 if parts.hostname:
                     auth = f"{urllib.parse.quote(user, safe='')}:{quoted}@"
@@ -1085,8 +1087,25 @@ class CameraScannerApp:
                     url = urllib.parse.urlunsplit(
                         (parts.scheme, auth + host, parts.path, parts.query, parts.fragment)
                     )
+        return url
+
+    def _copy_rtsp_with_password(self, urls: list[str], creds: dict):
+        """Копирует рабочий RTSP-URL, подставляя пароль из ONVIF-ответа."""
+        url = self._rtsp_with_credentials(urls, creds)
+        if not url:
+            return
         self._copy(url)
         messagebox.showinfo("RTSP", "Ссылка с паролем скопирована в буфер обмена.")
+
+    def _open_stream(self, urls: list[str], creds: dict, dev: dict):
+        url = self._rtsp_with_credentials(urls, creds)
+        if not url:
+            messagebox.showerror("Поток", "Нет RTSP-ссылки для этого устройства.")
+            return
+        try:
+            StreamPlayerWindow(self.root, f"Поток {dev.get('ip','')}", url)
+        except Exception as exc:  # noqa: BLE001
+            messagebox.showerror("Поток", f"Не удалось открыть: {exc}")
 
     def _show_password(self, creds: dict):
         win = tk.Toplevel(self.root)

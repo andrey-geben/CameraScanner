@@ -5,7 +5,7 @@
 [![Python](https://img.shields.io/badge/Python-3.12%2B-blue?logo=python&logoColor=white)](https://www.python.org/)
 [![Platform](https://img.shields.io/badge/Platform-Windows%2010%2F11-0078D6?logo=windows&logoColor=white)]()
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-1.4.4-blue)]()
+[![Version](https://img.shields.io/badge/Version-1.5.0-blue)]()
 
 **CameraScanner** — настольное приложение для быстрого поиска IP-камер и сетевых видеорегистраторов в локальной сети. Поддерживает семь независимых протоколов обнаружения — от быстрых broadcast/multicast до активного перебора адресов и портов, что позволяет находить камеры, у которых отключены штатные службы обнаружения.
 
@@ -33,6 +33,9 @@
 | **ISAPI probe (Hikvision)** | HTTP GET `/ISAPI/System/deviceInfo` | Модель, серийник и прошивка Hikvision; при 401 — данные из `WWW-Authenticate` |
 
 ### Дополнительно
+
+- ▶ **Встроенный просмотр RTSP** — кнопка «Смотреть поток» в карточке устройства;
+  видео открывается внутри приложения (без звука).
 
 - 🖥️ **Современный интерфейс** на Sun Valley (тема Windows 11) с переключением светлая/тёмная.
 - SADP работает обычными UDP-сокетами; права администратора обычно не нужны. Если Windows блокирует broadcast — запустите от администратора.
