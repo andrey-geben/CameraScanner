@@ -7,6 +7,7 @@ import subprocess
 import sys
 import threading
 import tkinter as tk
+import urllib.parse
 import webbrowser
 from tkinter import ttk, messagebox, filedialog
 
@@ -1043,10 +1044,28 @@ class CameraScannerApp:
         if creds.get("user"):
             ttk.Button(bar, text="Показать пароль",
                        command=lambda: self._show_password(creds)).pack(side="left", padx=6)
+            if urls:
+                ttk.Button(
+                    bar, text="Копировать RTSP с паролем",
+                    command=lambda: self._copy_rtsp_with_password(urls, creds),
+                ).pack(side="left", padx=6)
         if dev.get("web_url"):
             ttk.Button(bar, text="Открыть веб",
                        command=lambda: webbrowser.open(dev["web_url"])).pack(side="left")
         ttk.Button(bar, text="Закрыть", command=win.destroy).pack(side="right")
+
+    def _copy_rtsp_with_password(self, urls: list[str], creds: dict):
+        """Копирует рабочий RTSP-URL, подставляя пароль из ONVIF-ответа."""
+        if not urls:
+            return
+        url = urls[0]
+        pwd = creds.get("password", "")
+        if pwd:
+            quoted = urllib.parse.quote(pwd, safe="")
+            url = url.replace("password=***", f"password={quoted}")
+            url = url.replace(":***@", f":{quoted}@")
+        self._copy(url)
+        messagebox.showinfo("RTSP", "Ссылка с паролем скопирована в буфер обмена.")
 
     def _show_password(self, creds: dict):
         win = tk.Toplevel(self.root)
