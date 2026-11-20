@@ -7,6 +7,7 @@ import queue
 import subprocess
 import sys
 import threading
+import time
 import tkinter as tk
 import urllib.parse
 import webbrowser
@@ -38,7 +39,7 @@ from stream_player import StreamPlayerWindow
 
 # ------------------------------------------------------------------ constants
 APP_NAME = "CameraScanner"
-APP_VERSION = "1.9.0"
+APP_VERSION = "1.9.1"
 APP_AUTHOR = "Andrew Genben"
 APP_COPYRIGHT = f"© 2025–2026 {APP_AUTHOR}. Все права защищены."
 APP_DESCRIPTION = (
@@ -245,6 +246,8 @@ class CameraScannerApp:
         self._restore = restore or {}
         self._progress_queue: queue.Queue = queue.Queue()
         self.progress_var = tk.DoubleVar(value=0.0)
+        self._scanning = False
+        self._scan_started_at = 0.0
 
         try:
             sv_ttk.set_theme("dark")
@@ -293,6 +296,8 @@ class CameraScannerApp:
                         font=("Segoe UI Semibold", 15))
         style.configure("Subtitle.TLabel", background=bg, foreground=muted,
                         font=("Consolas", 8))
+        style.configure("PanelSubtitle.TLabel", background=panel, foreground=muted,
+                        font=("Consolas", 9))
         style.configure("Section.TLabel", background=panel, foreground=accent,
                         font=("Segoe UI Semibold", 9))
         style.configure("Muted.TLabel", background=bg, foreground=muted)
@@ -376,12 +381,18 @@ class CameraScannerApp:
 
         progress_wrap = ttk.Frame(top, style="Panel.TFrame")
         progress_wrap.pack(side="left", fill="x", expand=True, padx=(20, 20))
+        progress_row = ttk.Frame(progress_wrap, style="Panel.TFrame")
+        progress_row.pack(fill="x", pady=8)
         self.progress_canvas = tk.Canvas(
-            progress_wrap, height=4, bg="#2E3740", highlightthickness=0, bd=0)
-        self.progress_canvas.pack(fill="x", pady=8)
+            progress_row, height=4, bg="#2E3740", highlightthickness=0, bd=0)
+        self.progress_canvas.pack(side="left", fill="x", expand=True)
         self._progress_rect = self.progress_canvas.create_rectangle(
             0, 0, 0, 4, fill="#E6A100", outline="")
         self.progress_canvas.bind("<Configure>", lambda _e: self._draw_progress())
+        self.progress_text = ttk.Label(
+            progress_row, text="0% · —", style="PanelSubtitle.TLabel", width=16,
+            anchor="e")
+        self.progress_text.pack(side="right", padx=(12, 0))
 
         controls = ttk.Frame(top, style="Panel.TFrame")
         controls.pack(side="right")
@@ -835,6 +846,8 @@ class CameraScannerApp:
         self.tree.delete(*self.tree.get_children())
         self.results.clear()
         self._set_progress(0.0)
+        self._scanning = True
+        self._scan_started_at = time.time()
         self.status_var.set("Сканирование…")
         settings = {
             "auto": self.auto_discovery.get(),
@@ -1155,6 +1168,7 @@ class CameraScannerApp:
         except tk.TclError:
             return
         self._draw_progress()
+        self._update_progress_text()
         try:
             self.root.after(100, self._poll_progress)
         except tk.TclError:
@@ -1167,6 +1181,29 @@ class CameraScannerApp:
             self.progress_canvas.coords(
                 self._progress_rect, 0, 0, int(width * value), 4)
         except tk.TclError:
+            pass
+
+    def _update_progress_text(self):
+        try:
+            p = max(0.0, min(1.0, float(self.progress_var.get())))
+            if p >= 0.999:
+                text = "100% · готово"
+            elif not self._scanning:
+                text = f"{int(p * 100)}% · —"
+            elif p < 0.01 or not self._scan_started_at:
+                text = "0% · оценка…"
+            else:
+                elapsed = max(0.0, time.time() - self._scan_started_at)
+                remaining = max(0.0, elapsed * (1.0 - p) / p)
+                if remaining > 600:
+                    eta = ">10 мин"
+                elif remaining >= 60:
+                    eta = f"~{int(remaining // 60)}м {int(remaining % 60):02d}с"
+                else:
+                    eta = f"~{max(1, int(round(remaining)))}с"
+                text = f"{int(p * 100)}% · {eta}"
+            self.progress_text.config(text=text)
+        except (tk.TclError, ValueError):
             pass
 
     def show_device_details(self, event=None):
@@ -1340,6 +1377,7 @@ class CameraScannerApp:
                 self.tree.insert("", "end", iid=dev["ip"], values=values)
             else:
                 self.tree.insert("", "end", values=values)
+        self._scanning = False
         self.scan_btn.config(state="normal")
         self.stop_btn.config(state="disabled")
         self.count_label.set(f"{len(self.results)}")
